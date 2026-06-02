@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Multi-Source Intelligence Workflow Orchestrator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+   :root {
+  --bg: #020617;
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.35);
+  --accent-strong: #22c55e;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --border: rgba(148, 163, 184, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #0b1120, #020617 55%);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* ⭐ NEW: Split-screen left shrink */
+body.split-left {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 50vw;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 9999;
+  background: radial-gradient(circle at top, #0b1120, #020617 55%);
+}
+
+/* Background starfield */
+.starfield {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(circle at top, #020617, #000 60%);
+  overflow: hidden;
+}
+
+.starfield::before,
+.starfield::after {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background-image:
+    radial-gradient(2px 2px at 10% 20%, rgba(148, 163, 184, 0.7), transparent),
+    radial-gradient(1.5px 1.5px at 80% 30%, rgba(148, 163, 184, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 30% 70%, rgba(148, 163, 184, 0.5), transparent),
+    radial-gradient(2px 2px at 60% 80%, rgba(148, 163, 184, 0.7), transparent),
+    radial-gradient(1px 1px at 50% 40%, rgba(148, 163, 184, 0.4), transparent);
+  opacity: 0.7;
+  animation: drift 60s linear infinite;
+}
+
+.starfield::after {
+  animation-duration: 90s;
+  opacity: 0.4;
+}
+
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(10%, 10%, 0); }
+}
+
+/* Constellation tracker */
+.constellation {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.85));
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow:
+    0 12px 30px rgba(15, 23, 42, 0.9),
+    0 0 0 1px rgba(15, 23, 42, 0.9);
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
+
+.constellation-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.constellation-stars {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.star {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
+  position: relative;
+  transition: background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.star::after {
+  content: attr(data-step);
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.star.active {
+  background: var(--accent);
+  box-shadow:
+    0 0 10px var(--accent-soft),
+    0 0 0 1px rgba(15, 23, 42, 0.9);
+  transform: scale(1.15);
+}
+
+.star.split-active {
+  background: var(--accent-strong);
+  box-shadow:
+    0 0 14px rgba(34, 197, 94, 0.7),
+    0 0 0 1px rgba(15, 23, 42, 0.9);
+  animation: pulse 1.4s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1.1);
+    box-shadow:
+      0 0 10px rgba(34, 197, 94, 0.7),
+      0 0 0 1px rgba(15, 23, 42, 0.9);
+  }
+  70% {
+    transform: scale(1.3);
+    box-shadow:
+      0 0 18px rgba(34, 197, 94, 0.4),
+      0 0 0 1px rgba(15, 23, 42, 0.9);
+  }
+  100% {
+    transform: scale(1.1);
+    box-shadow:
+      0 0 10px rgba(34, 197, 94, 0.7),
+      0 0 0 1px rgba(15, 23, 42, 0.9);
+  }
+}
+
+/* Main layout */
+.shell {
+  position: relative;
+  z-index: 1;
+  padding: 70px 18px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.subtitle {
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 520px;
+}
+
+.header-pill {
+  font-size: 0.75rem;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.9));
+}
+
+.header-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+}
+
+/* Grid of modules */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.module {
+  background: radial-gradient(circle at top left, #020617, #020617 55%);
+  border-radius: 14px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--border);
+  box-shadow:
+    0 12px 30px rgba(15, 23, 42, 0.85),
+    0 0 0 1px rgba(15, 23, 42, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.module::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at top, rgba(56, 189, 248, 0.08), transparent 55%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.module.active::before {
+  opacity: 1;
+}
+
+.module-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.module-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.module-tag {
+  font-size: 0.65rem;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.module-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.hint span {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.input-row input {
+  flex: 1;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  background: rgba(15, 23, 42, 0.95);
+  color: var(--text);
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.input-row input::placeholder {
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.input-row input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.btn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.btn {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 9px;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: transform 0.1s ease, filter 0.1s ease, box-shadow 0.1s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #38bdf8, #22c55e);
+  color: #020617;
+  box-shadow: 0 8px 18px rgba(56, 189, 248, 0.35);
+}
+
+.btn-secondary {
+  background: radial-gradient(circle at top, #020617, #020617);
+  color: var(--text);
+  border: 1px solid rgba(148, 163, 184, 0.7);
+}
+
+.btn:active {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+  box-shadow: none;
+}
+
+.significance {
+  margin-top: 4px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.significance-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.65rem;
+  color: rgba(148, 163, 184, 0.9);
+  margin-bottom: 2px;
+  display: block;
+}
+
+/* Footer */
+.footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.footer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.footer-strong {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.footer-btn {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  background: radial-gradient(circle at top, rgba(127, 29, 29, 0.9), rgba(24, 24, 27, 0.95));
+  color: #fecaca;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 10px 20px rgba(127, 29, 29, 0.6);
+  transition: transform 0.1s ease, filter 0.1s ease, box-shadow 0.1s ease;
+}
+
+.footer-btn:active {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .constellation {
+    transform: translateX(-50%) scale(0.9);
+  }
+  .shell {
+    padding-top: 80px;
+  }
+}
+
+
+  </style>
+</head>
+<body>
+  <meta charset="UTF-8" />
+  <title>Multi-Source Intelligence Workflow Orchestrator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Paste CSS into a <style> tag here or link it externally -->
+  <style>
+    /* PASTE FULL CSS FROM BATCH 1 HERE */
+  </style>
+</head>
+<body>
+  <div class="starfield"></div>
+
+  <!-- Constellation tracker -->
+  <div class="constellation">
+    <div class="constellation-label">
+      <span style="width:6px;height:6px;border-radius:999px;background:var(--accent);box-shadow:0 0 8px var(--accent-soft);"></span>
+      <span>Workflow Constellation</span>
+    </div>
+    <div class="constellation-stars" id="constellationStars"></div>
+  </div>
+
+  <div class="shell" id="appShell">
+    <header class="header">
+      <div class="header-main">
+        <div class="title">Multi-Source Intelligence Workflow Orchestrator</div>
+        <div class="subtitle">
+          Conceptual offline prototype demonstrating a 12-step, multi-source research and verification pipeline with guided queries,
+          split-screen review, and visual synthesis. Each step combines a baseline URL with your evolving variables.
+        </div>
+      </div>
+      <div class="header-pill">
+        <span class="header-pill-dot"></span>
+        <span>Offline · Single File · HTML · CSS · JS</span>
+      </div>
+    </header>
+
+    <main class="grid" id="moduleGrid">
+      <!-- 1: Wikipedia (Tier 1) -->
+      <section
+        class="module"
+        data-step="1"
+        data-base-url="https://en.wikipedia.org/w/index.php?search="
+        data-autofill="true"
+        data-tier="1"
+      >
+        <div class="module-header">
+          <div class="module-title">1. Public Data Index (Wikipedia)</div>
+          <div class="module-tag">Baseline context</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>General topic or object name (e.g., "Desk")</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter a general topic or object name…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source provides broad, foundational context and establishes baseline information before deeper analysis. It helps
+            ensure the workflow begins with a wide-angle understanding of the subject.
+          </div>
+        </div>
+      </section>
+
+      <!-- 2: Technical (Tier 1) -->
+      <section
+        class="module"
+        data-step="2"
+        data-base-url="https://patents.google.com/?q="
+        data-autofill="true"
+        data-tier="1"
+      >
+        <div class="module-header">
+          <div class="module-title">2. Technical Database (Google Patents)</div>
+          <div class="module-tag">Specifications</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Object name or model designation</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter object name or model designation…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source is essential for validating specifications, capabilities, and technical attributes. It reduces uncertainty
+            early in the workflow by grounding the analysis in structured, authoritative data.
+          </div>
+        </div>
+      </section>
+
+      <!-- 3: Bing Images (Tier 1) -->
+      <section
+        class="module"
+        data-step="3"
+        data-base-url="https://www.bing.com/images/search?q="
+        data-autofill="true"
+        data-tier="1"
+      >
+        <div class="module-header">
+          <div class="module-title">3. Imagery Repository (Bing Images)</div>
+          <div class="module-tag">Visual confirmation</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Object name or visual descriptor</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter object name or visual descriptor…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source enables visual confirmation and cross-checking of physical characteristics. It supports rapid identification
+            and helps analysts detect discrepancies between reported and observed details.
+          </div>
+        </div>
+      </section>
+
+      <!-- 4: ManualsLib (Tier 2) -->
+      <section
+        class="module"
+        data-step="4"
+        data-base-url="https://www.manualslib.com/serp.php?query="
+        data-autofill="true"
+        data-tier="2"
+      >
+        <div class="module-header">
+          <div class="module-title">4. Equipment Specifications Archive (ManualsLib)</div>
+          <div class="module-tag">Dimensions & performance</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Specific model or equipment ID</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter specific model or equipment ID…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source provides detailed dimensional, material, and performance data. It is critical for assessing compatibility,
+            operational constraints, and potential use-case limitations.
+          </div>
+        </div>
+      </section>
+
+      <!-- 5: ImportYeti (Tier 2) -->
+      <section
+        class="module"
+        data-step="5"
+        data-base-url="https://www.importyeti.com/search?q="
+        data-autofill="true"
+        data-tier="2"
+      >
+        <div class="module-header">
+          <div class="module-title">5. Logistics & Supply Chain Index (ImportYeti)</div>
+          <div class="module-tag">Availability</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Company name or product identifier</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter company name or product identifier…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source highlights availability, distribution pathways, and logistical considerations. It helps analysts understand
+            real-world constraints that may impact operational feasibility.
+          </div>
+        </div>
+      </section>
+
+      <!-- 6: FAA Search (Tier 2) -->
+      <section
+        class="module"
+        data-step="6"
+        data-base-url="https://www.faa.gov/search?query="
+        data-autofill="true"
+        data-tier="2"
+      >
+        <div class="module-header">
+          <div class="module-title">6. Maintenance & Reliability Records (FAA Search)</div>
+          <div class="module-tag">Lifecycle</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Platform, component, or issue keyword</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter platform, component, or issue keyword…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source offers insight into historical performance, failure trends, and sustainment requirements. It supports
+            lifecycle assessment and risk evaluation.
+          </div>
+        </div>
+      </section>
+
+      <!-- 7: USAspending (Tier 3) -->
+      <section
+        class="module"
+        data-step="7"
+        data-base-url="https://www.usaspending.gov/search/?q="
+        data-autofill="true"
+        data-tier="3"
+      >
+        <div class="module-header">
+          <div class="module-title">7. Cost & Acquisition Database (USAspending)</div>
+          <div class="module-tag">Pricing</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Object name, vendor, or contract keyword</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter object, vendor, or contract keyword…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source provides pricing, procurement history, and cost-comparison data. It supports informed decision-making by
+            aligning operational needs with fiscal realities.
+          </div>
+        </div>
+      </section>
+
+      <!-- 8: OSHA (Tier 3) -->
+      <section
+        class="module"
+        data-step="8"
+        data-base-url="https://www.osha.gov/search?search="
+        data-autofill="true"
+        data-tier="3"
+      >
+        <div class="module-header">
+          <div class="module-title">8. Safety & Compliance Repository (OSHA)</div>
+          <div class="module-tag">Risk</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Object name or safety/regulation keyword</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter object or safety/regulation keyword…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source ensures that all options meet required safety, regulatory, and compliance standards. It reduces risk by
+            identifying potential red flags early.
+          </div>
+        </div>
+      </section>
+
+      <!-- 9: Google Scholar (Tier 3) -->
+      <section
+        class="module"
+        data-step="9"
+        data-base-url="https://scholar.google.com/scholar?q="
+        data-autofill="true"
+        data-tier="3"
+      >
+        <div class="module-header">
+          <div class="module-title">9. Historical Reports & Case Files (Google Scholar)</div>
+          <div class="module-tag">Precedent</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Object name or mission context</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter object name or mission context…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source provides precedent, lessons learned, and contextual patterns. It strengthens analysis by grounding decisions
+            in historical outcomes.
+          </div>
+        </div>
+      </section>
+
+      <!-- 10: DuckDuckGo (Tier 3) -->
+      <section
+        class="module"
+        data-step="10"
+        data-base-url="https://duckduckgo.com/?q="
+        data-autofill="true"
+        data-tier="3"
+      >
+        <div class="module-header">
+          <div class="module-title">10. Cross-Reference Verification Tool (DuckDuckGo)</div>
+          <div class="module-tag">Consistency</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Primary identifier or key term</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter primary identifier or key term…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source is used to validate consistency across multiple datasets. It helps detect anomalies, confirm accuracy, and
+            ensure the integrity of the overall workflow.
+          </div>
+        </div>
+      </section>
+
+      <!-- 11: Wikidata (Tier 3) -->
+      <section
+        class="module"
+        data-step="11"
+        data-base-url="https://www.wikidata.org/w/index.php?search="
+        data-autofill="false"
+        data-tier="3"
+      >
+        <div class="module-header">
+          <div class="module-title">11. Metadata & Identifier Lookup (Wikidata)</div>
+          <div class="module-tag">Linking</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Recommended query:
+            <span>Unique ID or entity label (e.g., "Q42" or name)</span>
+          </div>
+          <div class="input-row">
+            <input
+              type="text"
+              class="module-input"
+              placeholder="Enter a unique identifier or entity label…"
+            />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This source resolves unique identifiers, tags, and metadata relationships. It is crucial for linking disparate
+            information streams into a coherent picture.
+          </div>
+        </div>
+      </section>
+
+      <!-- 12: Visual Synthesis Board (draw.io) -->
+      <section
+        class="module"
+        data-step="12"
+        data-base-url="https://app.diagrams.net/"
+        data-autofill="false"
+        data-tier="none"
+      >
+        <div class="module-header">
+          <div class="module-title">12. Visual Synthesis Board (draw.io)</div>
+          <div class="module-tag">Decision space</div>
+        </div>
+        <div class="module-body">
+          <div class="hint">
+            Open the visual board to map relationships, options, and decision pathways.
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-new-tab">Open in New Tab</button>
+            <button class="btn btn-primary btn-split">Open in Split Screen</button>
+          </div>
+
+          <div class="significance">
+            <span class="significance-label">Significance</span>
+            This module enables analysts to consolidate findings, map relationships, and visualize decision pathways. It transforms
+            raw data into actionable insight and supports final mission-ready recommendations.
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-left">
+        <span><span class="footer-strong">Mass Close Split Screen</span> will close all opened workflow windows.</span>
+        <span>After closing, you will be returned to the top of the workflow to begin a new run.</span>
+      </div>
+      <button id="massCloseBtn" class="footer-btn">
+        ✖ Mass Close Split Screen
+      </button>
+    </footer>
+  </div>
+
+  <script>
+(function () {
+  const modules = Array.from(document.querySelectorAll(".module"));
+  const starsContainer = document.getElementById("constellationStars");
+  const massCloseBtn = document.getElementById("massCloseBtn");
+
+  let splitWindows = [];
+
+  // Tier master variables
+  let tierMasters = {
+    1: null,
+    2: null,
+    3: null
+  };
+
+  // Build constellation stars
+  const stars = modules.map((mod) => {
+    const step = mod.dataset.step;
+    const star = document.createElement("div");
+    star.className = "star";
+    star.dataset.step = step;
+    starsContainer.appendChild(star);
+    return star;
+  });
+
+  function getStar(mod) {
+    return stars.find((s) => s.dataset.step === mod.dataset.step);
+  }
+
+  function markActive(mod, mode) {
+    mod.classList.add("active");
+    const star = getStar(mod);
+    if (!star) return;
+    star.classList.add("active");
+    if (mode === "split") star.classList.add("split-active");
+  }
+
+  function resetAll() {
+    modules.forEach((m) => m.classList.remove("active"));
+    stars.forEach((s) => s.classList.remove("active", "split-active"));
+  }
+
+  // Build URL logic
+  function buildUrl(mod, value) {
+    const base = mod.dataset.baseUrl;
+    const step = mod.dataset.step;
+    const trimmed = (value || "").trim();
+
+    if (step === "12") return base; // draw.io
+    if (!trimmed) return null;
+
+    return base + encodeURIComponent(trimmed);
+  }
+
+  // Open in new tab
+  function openNew(url, mod) {
+    if (!url) return;
+    markActive(mod, "new");
+    window.open(url, "_blank");
+  }
+
+  // Open in split screen (right window only)
+  function openSplit(url, mod) {
+    if (!url) return;
+    markActive(mod, "split");
+
+    const screenW = window.screen.availWidth;
+    const screenH = window.screen.availHeight;
+    const halfW = Math.floor(screenW / 2);
+
+    const rightWin = window.open(
+      url,
+      "_blank",
+      `width=${halfW},height=${screenH},left=${halfW},top=0`
+    );
+
+    if (rightWin) splitWindows.push(rightWin);
+  }
+
+  // Tier Master Logic
+  function updateTierMaster(mod, value) {
+    const tier = mod.dataset.tier;
+    if (!tier || tier === "none") return;
+
+    const trimmed = (value || "").trim();
+    if (!trimmed) return;
+
+    // Update master for this tier
+    tierMasters[tier] = trimmed;
+
+    // Autofill other modules in same tier
+    modules.forEach((m) => {
+      if (m === mod) return;
+      if (m.dataset.tier !== tier) return;
+      if (m.dataset.autofill !== "true") return;
+
+      const input = m.querySelector(".module-input");
+      if (!input) return;
+
+      if (!input.value.trim()) {
+        input.value = trimmed;
+      }
+    });
+  }
+
+  // Attach listeners
+  modules.forEach((mod) => {
+    const input = mod.querySelector(".module-input");
+    const btnNew = mod.querySelector(".btn-new-tab");
+    const btnSplit = mod.querySelector(".btn-split");
+
+    if (input) {
+      input.addEventListener("change", () => updateTierMaster(mod, input.value));
+      input.addEventListener("blur", () => updateTierMaster(mod, input.value));
+    }
+
+    if (btnNew) {
+      btnNew.addEventListener("click", () => {
+        const value = input ? input.value : "";
+        // ⭐ ensure master + autofill update even if user never blurred
+        if (input) updateTierMaster(mod, value);
+        const url = buildUrl(mod, value);
+        openNew(url, mod);
+      });
+    }
+
+    if (btnSplit) {
+      btnSplit.addEventListener("click", () => {
+        const value = input ? input.value : "";
+        // ⭐ ensure master + autofill update even if user never blurred
+        if (input) updateTierMaster(mod, value);
+        const url = buildUrl(mod, value);
+        openSplit(url, mod);
+      });
+    }
+  });
+
+  // Mass Close
+  massCloseBtn.addEventListener("click", () => {
+    splitWindows = splitWindows.filter((w) => {
+      if (!w || w.closed) return false;
+      try { w.close(); } catch (e) {}
+      return false;
+    });
+
+    resetAll();
+    tierMasters = { 1: null, 2: null, 3: null };
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+})();
+
+  </script>
+</body>
+</html>
