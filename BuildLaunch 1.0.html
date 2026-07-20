@@ -1,651 +1,1247 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Custom Launcher Builder</title>
-  <style>
-    :root {
-      --bg: #050816;
-      --fg: #ffffff;
-      --accent: #38bdf8;
-      --accent-soft: rgba(56, 189, 248, 0.15);
-      --card-bg: rgba(15, 23, 42, 0.9);
-      --border-subtle: rgba(148, 163, 184, 0.4);
-      --danger: #f97373;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    body {
-      background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
-      color: var(--fg);
-      min-height: 100vh;
-      overflow: hidden;
-      position: relative;
-    }
-
-    #stars {
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    .star {
-      position: absolute;
-      width: 2px;
-      height: 2px;
-      background: white;
-      border-radius: 50%;
-      opacity: 0.2;
-      animation: twinkle 3s infinite ease-in-out;
-    }
-
-    @keyframes twinkle {
-      0%, 100% { opacity: 0.1; transform: scale(1); }
-      50% { opacity: 0.8; transform: scale(1.8); }
-    }
-
-    #app {
-      position: relative;
-      z-index: 1;
-      padding: 20px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    #modeTabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      background: rgba(15, 23, 42, 0.8);
-      padding: 6px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      backdrop-filter: blur(16px);
-      width: fit-content;
-    }
-
-    #modeTabs button {
-      border: none;
-      background: transparent;
-      color: #e5e7eb;
-      padding: 8px 16px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s, color 0.2s, transform 0.1s;
-    }
-
-    #modeTabs button.active {
-      background: var(--accent-soft);
-      color: var(--accent);
-      transform: translateY(-1px);
-    }
-
-    .view {
-      display: none;
-    }
-
-    .view.active {
-      display: block;
-    }
-
-    #launcherView h1,
-    #builderView h1 {
-      font-size: 22px;
-      margin-bottom: 12px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: #e5e7eb;
-    }
-
-    #grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 14px;
-      margin-top: 10px;
-    }
-
-    .buttonBox {
-      background: var(--card-bg);
-      border-radius: 14px;
-      padding: 12px 14px;
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      cursor: pointer;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-    }
-
-    .buttonBox:hover {
-      transform: translateY(-3px) scale(1.01);
-      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.9);
-      border-color: var(--accent);
-      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
-    }
-
-    .buttonTitle {
-      font-weight: 600;
-      font-size: 15px;
-      color: #f9fafb;
-    }
-
-    .buttonDesc {
-      font-size: 13px;
-      color: #9ca3af;
-    }
-
-    #builderLayout {
-      display: grid;
-      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-      gap: 16px;
-      align-items: flex-start;
-    }
-
-    #builderPanel {
-      background: var(--card-bg);
-      border-radius: 16px;
-      padding: 14px 16px;
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    #builderPanel label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #9ca3af;
-      margin-bottom: 2px;
-    }
-
-    #builderPanel input,
-    #builderPanel select {
-      width: 100%;
-      padding: 7px 9px;
-      border-radius: 10px;
-      border: 1px solid rgba(55, 65, 81, 0.9);
-      background: rgba(15, 23, 42, 0.9);
-      color: #e5e7eb;
-      font-size: 13px;
-      outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-    }
-
-    #builderPanel input:focus,
-    #builderPanel select:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
-      background: rgba(15, 23, 42, 1);
-    }
-
-    #builderPanel .row {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 4px;
-    }
-
-    #builderPanel .buttonsRow {
-      display: flex;
-      gap: 8px;
-      margin-top: 6px;
-    }
-
-    #builderPanel button {
-      flex: 1;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.6);
-      background: rgba(15, 23, 42, 0.9);
-      color: #e5e7eb;
-      padding: 7px 10px;
-      font-size: 13px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
-      white-space: nowrap;
-    }
-
-    #builderPanel button.primary {
-      border-color: var(--accent);
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
-      color: #e0f2fe;
-    }
-
-    #builderPanel button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.8);
-      border-color: var(--accent);
-      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), rgba(15, 23, 42, 0.98));
-    }
-
-    #builderPanel button.danger {
-      border-color: rgba(248, 113, 113, 0.7);
-      color: #fecaca;
-    }
-
-    #builderPanel button.danger:hover {
-      background: radial-gradient(circle at top left, rgba(248, 113, 113, 0.2), rgba(15, 23, 42, 0.98));
-    }
-
-    #builderPreview {
-      background: rgba(15, 23, 42, 0.9);
-      border-radius: 16px;
-      padding: 14px 16px;
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      min-height: 80px;
-    }
-
-    #builderPreview h2 {
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #9ca3af;
-      margin-bottom: 8px;
-    }
-
-    #builderPreview .empty {
-      font-size: 13px;
-      color: #6b7280;
-      font-style: italic;
-    }
-
-    @media (max-width: 800px) {
-      body {
-        overflow-y: auto;
-      }
-      #builderLayout {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-.deleteIcon {
-  all: unset !important;       /* Remove ALL inherited styles */
-  position: absolute !important;
-  top: 6px !important;
-  right: 6px !important;
-  z-index: 9999 !important;
-
-  font-size: 18px !important;
-  line-height: 18px !important;
-  color: var(--accent) !important;
-  cursor: pointer !important;
-
-  text-shadow: 0 0 6px rgba(56, 189, 248, 0.8) !important;
-  opacity: 0.9 !important;
-
-  /* THE REAL FIX */
-  flex: none !important;
-  display: inline-block !important;
-  background: none !important;
-  border: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-.deleteIcon:hover {
-  color: #ffffff !important;
-  transform: scale(1.25) !important;
-  text-shadow: 0 0 12px rgba(56, 189, 248, 1) !important;
-}
-  </style>
-</head>
-<body>
- <div id="exportRoot">
-  <div id="stars"></div>
-
-  <div id="app">
-    <div id="modeTabs">
-      <button data-mode="launcher" class="active">Launcher</button>
-      <button data-mode="builder">Builder</button>
-    </div>
-
-    <div id="launcherView" class="view active">
-      <h1>Launcher</h1>
-      <div id="grid"></div>
-    </div>
-
-    <div id="builderView" class="view">
-      <h1>Builder Mode</h1>
-      <div id="builderLayout">
-        <div id="builderPanel">
-          <div class="row">
-            <label for="btnLabel">Button Label</label>
-            <input id="btnLabel" placeholder="e.g. Docs, Dashboard, Tools">
-          </div>
-          <div class="row">
-            <label for="btnDesc">Description</label>
-            <input id="btnDesc" placeholder="Optional short description">
-          </div>
-          <div class="row">
-            <label for="btnURL">URL</label>
-            <input id="btnURL" placeholder="https://example.com">
-          </div>
-          <div class="row">
-            <label for="btnMode">Open Mode</label>
-            <select id="btnMode">
-              <option value="tab">Open in New Tab</option>
-              <option value="window">Open in New Window (Split-Screen Capable)</option>
-            </select>
-          </div>
-          <div class="buttonsRow">
-            <button id="addButton" class="primary">Add Button</button>
-            <button id="exportSelf" onclick="exportLauncher()">Export New Launcher</button>
-          </div>
-        </div>
-
-        <div id="builderPreview">
-          <h2>Preview</h2>
-          <div class="empty">No buttons yet. Add one on the left.</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<!-- ---------------------------------------------------------
-     Ensures transfer of new buttons user adds
----------------------------------------------------------- -->
-<script>
-  window.buttons = window.buttons || [];
-</script>
-
-<script id="launcherCode">
-
-// ---------------------------------------------------------
-// BUILDER ENHANCEMENTS (Delete, Future Editing Tools)
-// ---------------------------------------------------------
-function deleteButton(index) {
-  window.buttons.splice(index, 1);
-  renderLauncher();
-  renderBuilderPreview();
-}
-
-
-// ---------------------------------------------------------
-// STARFIELD
-// ---------------------------------------------------------
-(function () {
-  const starsContainer = document.getElementById("stars");
-  for (let i = 0; i < 200; i++) {
-    const s = document.createElement("div");
-    s.className = "star";
-    s.style.top = Math.random() * 100 + "%";
-    s.style.left = Math.random() * 100 + "%";
-    s.style.animationDelay = Math.random() * 3 + "s";
-    starsContainer.appendChild(s);
-  }
-})();
-
-// ---------------------------------------------------------
-// MODE SWITCHING
-// ---------------------------------------------------------
-document.querySelectorAll("#modeTabs button").forEach(function (btn) {
-  btn.addEventListener("click", function () {
-    const mode = btn.getAttribute("data-mode");
-
-    document.querySelectorAll("#modeTabs button")
-      .forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-
-    document.querySelectorAll(".view")
-      .forEach(v => v.classList.remove("active"));
-
-    const view = document.getElementById(mode + "View");
-    if (view) view.classList.add("active");
-  });
-});
-
-// ---------------------------------------------------------
-// RENDER LAUNCHER
-// ---------------------------------------------------------
-function renderLauncher() {
-  const grid = document.getElementById("grid");
-  if (!grid) return;
-
-  grid.innerHTML = "";
-
-  if (!window.buttons.length) {
-    const empty = document.createElement("div");
-    empty.className = "buttonBox";
-
-    const emptyTitle = document.createElement("div");
-    emptyTitle.className = "buttonTitle";
-    emptyTitle.textContent = "No buttons yet";
-
-    const emptyDesc = document.createElement("div");
-    emptyDesc.className = "buttonDesc";
-    emptyDesc.textContent = "Use the Builder tab to add some.";
-
-    empty.appendChild(emptyTitle);
-    empty.appendChild(emptyDesc);
-    grid.appendChild(empty);
-    return;
-  }
-
-  window.buttons.forEach(btn => {
-    const a = document.createElement("a");
-    a.className = "buttonBox";
-    a.href = btn.url;
-    a.dataset.url = btn.url;
-    a.dataset.mode = btn.mode || "tab";
-
-    const btnTitle = document.createElement("div");
-    btnTitle.className = "buttonTitle";
-    btnTitle.textContent = btn.label || "";
-
-    const btnDesc = document.createElement("div");
-    btnDesc.className = "buttonDesc";
-    btnDesc.textContent = btn.desc || "";
-
-    a.appendChild(btnTitle);
-    a.appendChild(btnDesc);
-
-    // ---------------------------------------------------------
-    // UPDATED CLICK HANDLER — "window" mode = split‑screen‑right
-    // ---------------------------------------------------------
-    a.addEventListener("click", e => {
-      e.preventDefault();
-      const mode = btn.mode || "tab";
-
-      if (mode === "window") {
-        // Right‑side split screen
-        const w = Math.floor(window.screen.width / 2);
-        const h = window.screen.height;
-        const left = window.screen.width - w;
-
-        window.open(
-          btn.url,
-          "_blank",
-          `popup,width=${w},height=${h},left=${left},top=0`
-        );
-      }
-
-      else {
-        window.open(btn.url, "_blank");
-      }
-    });
-
-    grid.appendChild(a);
-  });
-}
-
-// ---------------------------------------------------------
-// RENDER BUILDER PREVIEW (with neon delete icon)
-// ---------------------------------------------------------
-function renderBuilderPreview() {
-  const preview = document.getElementById("builderPreview");
-  if (!preview) return;
-
-  preview.innerHTML = "";
-
-  const previewTitle = document.createElement("h2");
-  previewTitle.textContent = "Preview";
-  preview.appendChild(previewTitle);
-
-  if (!window.buttons.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = "No buttons yet. Add one on the left.";
-    preview.appendChild(empty);
-    return;
-  }
-
-  window.buttons.forEach((btn, index) => {
-    const box = document.createElement("div");
-    box.className = "buttonBox builderPreviewItem";
-    box.style.position = "relative"; // required for absolute delete icon
-
-    const title = document.createElement("div");
-    title.className = "buttonTitle";
-    title.textContent = btn.label || "";
-
-    const desc = document.createElement("div");
-    desc.className = "buttonDesc";
-    desc.textContent = btn.desc || "";
-
-    // DELETE ICON (always visible neon X)
-    const del = document.createElement("div");
-    del.className = "deleteIcon";
-    del.textContent = "✕";
-    del.onclick = () => deleteButton(index);
-
-    box.appendChild(title);
-    box.appendChild(desc);
-    box.appendChild(del);
-
-    preview.appendChild(box);
-  });
-}
-
-// ---------------------------------------------------------
-// ADD BUTTON
-// ---------------------------------------------------------
-document.getElementById("addButton").onclick = function () {
-  const label = document.getElementById("btnLabel").value.trim();
-  const desc  = document.getElementById("btnDesc").value.trim();
-  const url   = document.getElementById("btnURL").value.trim();
-  const mode  = document.getElementById("btnMode").value;
-
-  if (!label || !url) {
-    alert("Label and URL are required.");
-    return;
-  }
-
-  window.buttons.push({ label, desc, url, mode });
-
-  renderLauncher();
-  renderBuilderPreview();
-
-  document.getElementById("btnLabel").value = "";
-  document.getElementById("btnDesc").value  = "";
-  document.getElementById("btnURL").value   = "";
-};
-
-
-// ---------------------------------------------------------
-// INITIAL RENDER + FORCE LAUNCHER AS DEFAULT VIEW
-// ---------------------------------------------------------
-window.addEventListener("DOMContentLoaded", () => {
-  // Render content
-  renderLauncher();
-  renderBuilderPreview();
-
-  // Clear any existing active tab
-  document.querySelectorAll("#modeTabs button")
-    .forEach(b => b.classList.remove("active"));
-
-  // Activate Launcher tab
-  const launcherTab = document.querySelector('#modeTabs button[data-mode="launcher"]');
-  if (launcherTab) launcherTab.classList.add("active");
-
-  // Clear any existing active view (e.g., Builder)
-  document.querySelectorAll(".view")
-    .forEach(v => v.classList.remove("active"));
-
-  // Activate Launcher view
-  const launcherView = document.getElementById("launcherView");
-  if (launcherView) launcherView.classList.add("active");
-});
-
-// ---------------------------------------------------------
-// DEFAULT VIEW ON LOAD (Launcher)
-// ---------------------------------------------------------
-window.addEventListener("DOMContentLoaded", () => {
-  // Force Launcher tab active
-  const launcherTab = document.querySelector('#modeTabs button[data-mode="launcher"]');
-  if (launcherTab) launcherTab.classList.add("active");
-
-  // Force Launcher view active
-  const launcherView = document.getElementById("launcherView");
-  if (launcherView) launcherView.classList.add("active");
-
-  renderLauncher();
-  renderBuilderPreview();
-});
-
-</script>
-
-
-<!-- ---------------------------------------------------------
-     EXPORTER
---------------------------------------------------------- -->
-<script>
-window.exportLauncher = function () {
-  console.log("EXPORT LAUNCHER CALLED");
-
-  const css = document.querySelector("style")?.textContent || "";
-
-  const js = document.getElementById("launcherCode")
-    .textContent
-    .replace(/\u200B/g, "")
-    .replace(/\u00A0/g, " ")
-    .replace(/\r/g, "")
-    .replace(/\t/g, " ")
-    .trim();
-
-  const encodedButtons = JSON.stringify(window.buttons || [], null, 2);
-
-  const bodyHTML = document.getElementById("exportRoot").innerHTML
-    .replace(/`/g, "\\`")
-    .replace(/\$\{/g, "\\${");
-
-  const html = `
-<style>${css}</style>
-
-${bodyHTML}
-
-<script>
-window.buttons = ${encodedButtons};
-<\/script>
-
-<script>
-${js}
-<\/script>
-`;
-
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "launcher.html";
-  a.click();
-  URL.revokeObjectURL(url);
-};
-</script>
-</body>
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <title>Custom Launcher Builder</title>
+
+  <style>
+
+    :root {
+
+      --bg: #050816;
+
+      --fg: #ffffff;
+
+      --accent: #38bdf8;
+
+      --accent-soft: rgba(56, 189, 248, 0.15);
+
+      --card-bg: rgba(15, 23, 42, 0.9);
+
+      --border-subtle: rgba(148, 163, 184, 0.4);
+
+      --danger: #f97373;
+
+    }
+
+
+
+    * {
+
+      box-sizing: border-box;
+
+      margin: 0;
+
+      padding: 0;
+
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    }
+
+
+
+    body {
+
+      background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
+
+      color: var(--fg);
+
+      min-height: 100vh;
+
+      overflow: hidden;
+
+      position: relative;
+
+    }
+
+
+
+    #stars {
+
+      position: fixed;
+
+      inset: 0;
+
+      overflow: hidden;
+
+      z-index: 0;
+
+      pointer-events: none;
+
+    }
+
+
+
+    .star {
+
+      position: absolute;
+
+      width: 2px;
+
+      height: 2px;
+
+      background: white;
+
+      border-radius: 50%;
+
+      opacity: 0.2;
+
+      animation: twinkle 3s infinite ease-in-out;
+
+    }
+
+
+
+    @keyframes twinkle {
+
+      0%, 100% { opacity: 0.1; transform: scale(1); }
+
+      50% { opacity: 0.8; transform: scale(1.8); }
+
+    }
+
+
+
+    #app {
+
+      position: relative;
+
+      z-index: 1;
+
+      padding: 20px;
+
+      max-width: 1100px;
+
+      margin: 0 auto;
+
+    }
+
+
+
+    #modeTabs {
+
+      display: flex;
+
+      gap: 8px;
+
+      margin-bottom: 16px;
+
+      background: rgba(15, 23, 42, 0.8);
+
+      padding: 6px;
+
+      border-radius: 999px;
+
+      border: 1px solid rgba(148, 163, 184, 0.4);
+
+      backdrop-filter: blur(16px);
+
+      width: fit-content;
+
+    }
+
+
+
+    #modeTabs button {
+
+      border: none;
+
+      background: transparent;
+
+      color: #e5e7eb;
+
+      padding: 8px 16px;
+
+      border-radius: 999px;
+
+      cursor: pointer;
+
+      font-size: 14px;
+
+      transition: background 0.2s, color 0.2s, transform 0.1s;
+
+    }
+
+
+
+    #modeTabs button.active {
+
+      background: var(--accent-soft);
+
+      color: var(--accent);
+
+      transform: translateY(-1px);
+
+    }
+
+
+
+    .view {
+
+      display: none;
+
+    }
+
+
+
+    .view.active {
+
+      display: block;
+
+    }
+
+
+
+    #launcherView h1,
+
+    #builderView h1 {
+
+      font-size: 22px;
+
+      margin-bottom: 12px;
+
+      letter-spacing: 0.04em;
+
+      text-transform: uppercase;
+
+      color: #e5e7eb;
+
+    }
+
+
+
+    #grid {
+
+      display: grid;
+
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+
+      gap: 14px;
+
+      margin-top: 10px;
+
+    }
+
+
+
+    .buttonBox {
+
+      background: var(--card-bg);
+
+      border-radius: 14px;
+
+      padding: 12px 14px;
+
+      border: 1px solid var(--border-subtle);
+
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+
+      cursor: pointer;
+
+      text-decoration: none;
+
+      color: inherit;
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 4px;
+
+      transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+
+    }
+
+
+
+    .buttonBox:hover {
+
+      transform: translateY(-3px) scale(1.01);
+
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.9);
+
+      border-color: var(--accent);
+
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
+
+    }
+
+
+
+    .buttonTitle {
+
+      font-weight: 600;
+
+      font-size: 15px;
+
+      color: #f9fafb;
+
+    }
+
+
+
+    .buttonDesc {
+
+      font-size: 13px;
+
+      color: #9ca3af;
+
+    }
+
+
+
+    #builderLayout {
+
+      display: grid;
+
+      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+
+      gap: 16px;
+
+      align-items: flex-start;
+
+    }
+
+
+
+    #builderPanel {
+
+      background: var(--card-bg);
+
+      border-radius: 16px;
+
+      padding: 14px 16px;
+
+      border: 1px solid var(--border-subtle);
+
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 8px;
+
+    }
+
+
+
+    #builderPanel label {
+
+      font-size: 12px;
+
+      text-transform: uppercase;
+
+      letter-spacing: 0.08em;
+
+      color: #9ca3af;
+
+      margin-bottom: 2px;
+
+    }
+
+
+
+    #builderPanel input,
+
+    #builderPanel select {
+
+      width: 100%;
+
+      padding: 7px 9px;
+
+      border-radius: 10px;
+
+      border: 1px solid rgba(55, 65, 81, 0.9);
+
+      background: rgba(15, 23, 42, 0.9);
+
+      color: #e5e7eb;
+
+      font-size: 13px;
+
+      outline: none;
+
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+
+    }
+
+
+
+    #builderPanel input:focus,
+
+    #builderPanel select:focus {
+
+      border-color: var(--accent);
+
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+
+      background: rgba(15, 23, 42, 1);
+
+    }
+
+
+
+    #builderPanel .row {
+
+      display: flex;
+
+      flex-direction: column;
+
+      margin-bottom: 4px;
+
+    }
+
+
+
+    #builderPanel .buttonsRow {
+
+      display: flex;
+
+      gap: 8px;
+
+      margin-top: 6px;
+
+    }
+
+
+
+    #builderPanel button {
+
+      flex: 1;
+
+      border-radius: 999px;
+
+      border: 1px solid rgba(148, 163, 184, 0.6);
+
+      background: rgba(15, 23, 42, 0.9);
+
+      color: #e5e7eb;
+
+      padding: 7px 10px;
+
+      font-size: 13px;
+
+      cursor: pointer;
+
+      display: inline-flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      gap: 6px;
+
+      transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+
+      white-space: nowrap;
+
+    }
+
+
+
+    #builderPanel button.primary {
+
+      border-color: var(--accent);
+
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
+
+      color: #e0f2fe;
+
+    }
+
+
+
+    #builderPanel button:hover {
+
+      transform: translateY(-1px);
+
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.8);
+
+      border-color: var(--accent);
+
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), rgba(15, 23, 42, 0.98));
+
+    }
+
+
+
+    #builderPanel button.danger {
+
+      border-color: rgba(248, 113, 113, 0.7);
+
+      color: #fecaca;
+
+    }
+
+
+
+    #builderPanel button.danger:hover {
+
+      background: radial-gradient(circle at top left, rgba(248, 113, 113, 0.2), rgba(15, 23, 42, 0.98));
+
+    }
+
+
+
+    #builderPreview {
+
+      background: rgba(15, 23, 42, 0.9);
+
+      border-radius: 16px;
+
+      padding: 14px 16px;
+
+      border: 1px solid var(--border-subtle);
+
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+
+      min-height: 80px;
+
+    }
+
+
+
+    #builderPreview h2 {
+
+      font-size: 13px;
+
+      text-transform: uppercase;
+
+      letter-spacing: 0.12em;
+
+      color: #9ca3af;
+
+      margin-bottom: 8px;
+
+    }
+
+
+
+    #builderPreview .empty {
+
+      font-size: 13px;
+
+      color: #6b7280;
+
+      font-style: italic;
+
+    }
+
+
+
+    @media (max-width: 800px) {
+
+      body {
+
+        overflow-y: auto;
+
+      }
+
+      #builderLayout {
+
+        grid-template-columns: minmax(0, 1fr);
+
+      }
+    }
+
+
+.deleteIcon {
+
+  all: unset !important;       /* Remove ALL inherited styles */
+
+  position: absolute !important;
+
+  top: 6px !important;
+
+  right: 6px !important;
+
+  z-index: 9999 !important;
+
+
+
+  font-size: 18px !important;
+
+  line-height: 18px !important;
+
+  color: var(--accent) !important;
+
+  cursor: pointer !important;
+
+
+
+  text-shadow: 0 0 6px rgba(56, 189, 248, 0.8) !important;
+
+  opacity: 0.9 !important;
+
+
+
+  /* THE REAL FIX */
+
+  flex: none !important;
+
+  display: inline-block !important;
+
+  background: none !important;
+
+  border: none !important;
+
+  padding: 0 !important;
+
+  margin: 0 !important;
+
+}
+
+
+
+.deleteIcon:hover {
+
+  color: #ffffff !important;
+
+  transform: scale(1.25) !important;
+
+  text-shadow: 0 0 12px rgba(56, 189, 248, 1) !important;
+
+}
+
+  </style>
+
+</head>
+
+<body>
+
+ <div id="exportRoot">
+
+  <div id="stars"></div>
+
+
+
+  <div id="app">
+
+    <div id="modeTabs">
+
+      <button data-mode="launcher" class="active">Launcher</button>
+
+      <button data-mode="builder">Builder</button>
+
+    </div>
+
+
+
+    <div id="launcherView" class="view active">
+
+      <h1>Launcher</h1>
+
+      <div id="grid"></div>
+
+    </div>
+
+
+
+    <div id="builderView" class="view">
+
+      <h1>Builder Mode</h1>
+
+      <div id="builderLayout">
+
+        <div id="builderPanel">
+
+          <div class="row">
+
+            <label for="btnLabel">Button Label</label>
+
+            <input id="btnLabel" placeholder="e.g. Docs, Dashboard, Tools">
+
+          </div>
+
+          <div class="row">
+
+            <label for="btnDesc">Description</label>
+
+            <input id="btnDesc" placeholder="Optional short description">
+
+          </div>
+
+          <div class="row">
+
+            <label for="btnURL">URL</label>
+
+            <input id="btnURL" placeholder="https://example.com">
+
+          </div>
+
+          <div class="row">
+
+            <label for="btnMode">Open Mode</label>
+
+            <select id="btnMode">
+
+              <option value="tab">Open in New Tab</option>
+
+              <option value="window">Open in New Window (Split-Screen Capable)</option>
+
+            </select>
+
+          </div>
+
+          <div class="buttonsRow">
+
+            <button id="addButton" class="primary">Add Button</button>
+
+            <button id="exportSelf" onclick="exportLauncher()">Export New Launcher</button>
+
+          </div>
+
+        </div>
+
+
+
+        <div id="builderPreview">
+
+          <h2>Preview</h2>
+
+          <div class="empty">No buttons yet. Add one on the left.</div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+
+<!-- ---------------------------------------------------------
+
+     Ensures transfer of new buttons user adds
+
+---------------------------------------------------------- -->
+
+<script>
+
+  window.buttons = window.buttons || [];
+
+</script>
+
+
+
+<script id="launcherCode">
+
+
+
+// ---------------------------------------------------------
+
+// BUILDER ENHANCEMENTS (Delete, Future Editing Tools)
+
+// ---------------------------------------------------------
+
+function deleteButton(index) {
+
+  window.buttons.splice(index, 1);
+
+  renderLauncher();
+
+  renderBuilderPreview();
+
+}
+
+
+
+
+
+// ---------------------------------------------------------
+
+// STARFIELD
+
+// ---------------------------------------------------------
+
+(function () {
+
+  const starsContainer = document.getElementById("stars");
+
+  for (let i = 0; i < 200; i++) {
+
+    const s = document.createElement("div");
+
+    s.className = "star";
+
+    s.style.top = Math.random() * 100 + "%";
+
+    s.style.left = Math.random() * 100 + "%";
+
+    s.style.animationDelay = Math.random() * 3 + "s";
+
+    starsContainer.appendChild(s);
+
+  }
+
+})();
+
+
+
+// ---------------------------------------------------------
+
+// MODE SWITCHING
+
+// ---------------------------------------------------------
+
+document.querySelectorAll("#modeTabs button").forEach(function (btn) {
+
+  btn.addEventListener("click", function () {
+
+    const mode = btn.getAttribute("data-mode");
+
+
+
+    document.querySelectorAll("#modeTabs button")
+
+      .forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+
+
+
+    document.querySelectorAll(".view")
+
+      .forEach(v => v.classList.remove("active"));
+
+
+
+    const view = document.getElementById(mode + "View");
+
+    if (view) view.classList.add("active");
+
+  });
+
+});
+
+
+
+// ---------------------------------------------------------
+
+// RENDER LAUNCHER
+
+// ---------------------------------------------------------
+
+function renderLauncher() {
+
+  const grid = document.getElementById("grid");
+
+  if (!grid) return;
+
+
+
+  grid.innerHTML = "";
+
+
+
+  if (!window.buttons.length) {
+
+    const empty = document.createElement("div");
+
+    empty.className = "buttonBox";
+
+
+
+    const emptyTitle = document.createElement("div");
+
+    emptyTitle.className = "buttonTitle";
+
+    emptyTitle.textContent = "No buttons yet";
+
+
+
+    const emptyDesc = document.createElement("div");
+
+    emptyDesc.className = "buttonDesc";
+
+    emptyDesc.textContent = "Use the Builder tab to add some.";
+
+
+
+    empty.appendChild(emptyTitle);
+
+    empty.appendChild(emptyDesc);
+
+    grid.appendChild(empty);
+
+    return;
+
+  }
+
+
+
+  window.buttons.forEach(btn => {
+
+    const a = document.createElement("a");
+
+    a.className = "buttonBox";
+
+    a.href = btn.url;
+
+    a.dataset.url = btn.url;
+
+    a.dataset.mode = btn.mode || "tab";
+
+
+
+    const btnTitle = document.createElement("div");
+
+    btnTitle.className = "buttonTitle";
+
+    btnTitle.textContent = btn.label || "";
+
+
+
+    const btnDesc = document.createElement("div");
+
+    btnDesc.className = "buttonDesc";
+
+    btnDesc.textContent = btn.desc || "";
+
+
+
+    a.appendChild(btnTitle);
+
+    a.appendChild(btnDesc);
+
+
+
+    // ---------------------------------------------------------
+
+    // UPDATED CLICK HANDLER — "window" mode = split‑screen‑right
+
+    // ---------------------------------------------------------
+
+    a.addEventListener("click", e => {
+
+      e.preventDefault();
+
+      const mode = btn.mode || "tab";
+
+
+
+      if (mode === "window") {
+
+        // Right‑side split screen
+
+        const w = Math.floor(window.screen.width / 2);
+
+        const h = window.screen.height;
+
+        const left = window.screen.width - w;
+
+
+
+        window.open(
+
+          btn.url,
+
+          "_blank",
+
+          `popup,width=${w},height=${h},left=${left},top=0`
+
+        );
+
+      }
+
+
+
+      else {
+
+        window.open(btn.url, "_blank");
+
+      }
+
+    });
+
+
+
+    grid.appendChild(a);
+
+  });
+
+}
+
+
+
+// ---------------------------------------------------------
+
+// RENDER BUILDER PREVIEW (with neon delete icon)
+
+// ---------------------------------------------------------
+
+function renderBuilderPreview() {
+
+  const preview = document.getElementById("builderPreview");
+
+  if (!preview) return;
+
+
+
+  preview.innerHTML = "";
+
+
+
+  const previewTitle = document.createElement("h2");
+
+  previewTitle.textContent = "Preview";
+
+  preview.appendChild(previewTitle);
+
+
+
+  if (!window.buttons.length) {
+
+    const empty = document.createElement("div");
+
+    empty.className = "empty";
+
+    empty.textContent = "No buttons yet. Add one on the left.";
+
+    preview.appendChild(empty);
+
+    return;
+
+  }
+
+
+
+  window.buttons.forEach((btn, index) => {
+
+    const box = document.createElement("div");
+
+    box.className = "buttonBox builderPreviewItem";
+
+    box.style.position = "relative"; // required for absolute delete icon
+
+
+
+    const title = document.createElement("div");
+
+    title.className = "buttonTitle";
+
+    title.textContent = btn.label || "";
+
+
+
+    const desc = document.createElement("div");
+
+    desc.className = "buttonDesc";
+
+    desc.textContent = btn.desc || "";
+
+
+
+    // DELETE ICON (always visible neon X)
+
+    const del = document.createElement("div");
+
+    del.className = "deleteIcon";
+
+    del.textContent = "✕";
+
+    del.onclick = () => deleteButton(index);
+
+
+
+    box.appendChild(title);
+
+    box.appendChild(desc);
+
+    box.appendChild(del);
+
+
+
+    preview.appendChild(box);
+
+  });
+
+}
+
+
+
+// ---------------------------------------------------------
+
+// ADD BUTTON
+
+// ---------------------------------------------------------
+
+document.getElementById("addButton").onclick = function () {
+
+  const label = document.getElementById("btnLabel").value.trim();
+
+  const desc  = document.getElementById("btnDesc").value.trim();
+
+  const url   = document.getElementById("btnURL").value.trim();
+
+  const mode  = document.getElementById("btnMode").value;
+
+
+
+  if (!label || !url) {
+
+    alert("Label and URL are required.");
+
+    return;
+
+  }
+
+
+
+  window.buttons.push({ label, desc, url, mode });
+
+
+
+  renderLauncher();
+
+  renderBuilderPreview();
+
+
+
+  document.getElementById("btnLabel").value = "";
+
+  document.getElementById("btnDesc").value  = "";
+
+  document.getElementById("btnURL").value   = "";
+
+};
+
+// ---------------------------------------------------------
+
+// DEFAULT VIEW ON LOAD (Launcher)
+
+// ---------------------------------------------------------
+
+window.addEventListener("DOMContentLoaded", () => {
+
+  // Force Launcher tab active
+
+  const launcherTab = document.querySelector('#modeTabs button[data-mode="launcher"]');
+
+  if (launcherTab) launcherTab.classList.add("active");
+
+
+
+  // Force Launcher view active
+
+  const launcherView = document.getElementById("launcherView");
+
+  if (launcherView) launcherView.classList.add("active");
+
+
+
+  renderLauncher();
+
+  renderBuilderPreview();
+
+});
+
+
+
+</script>
+
+
+
+
+
+<!-- ---------------------------------------------------------
+
+     EXPORTER
+
+--------------------------------------------------------- -->
+
+<script>
+
+window.exportLauncher = function () {
+
+  console.log("EXPORT LAUNCHER CALLED");
+
+
+
+  const css = document.querySelector("style")?.textContent || "";
+
+
+
+  const js = document.getElementById("launcherCode")
+
+    .textContent
+
+    .replace(/\u200B/g, "")
+
+    .replace(/\u00A0/g, " ")
+
+    .replace(/\r/g, "")
+
+    .replace(/\t/g, " ")
+
+    .trim();
+
+
+
+  const encodedButtons = JSON.stringify(window.buttons || [], null, 2);
+
+
+
+  const bodyHTML = document.getElementById("exportRoot").innerHTML
+
+    .replace(/`/g, "\\`")
+
+    .replace(/\$\{/g, "\\${");
+
+
+
+  const html = `
+
+<style>${css}</style>
+
+
+
+${bodyHTML}
+
+
+
+<script>
+
+window.buttons = ${encodedButtons};
+
+<\/script>
+
+
+
+<script>
+
+${js}
+
+<\/script>
+
+`;
+
+
+
+  const blob = new Blob([html], { type: "text/html" });
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+
+  a.href = url;
+
+  a.download = "launcher.html";
+
+  a.click();
+
+  URL.revokeObjectURL(url);
+
+};
+
+</script>
+
+</body>
+
 </html>
