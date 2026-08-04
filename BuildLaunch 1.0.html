@@ -136,6 +136,80 @@
       background: radial-gradient(circle at top left, rgba(248, 113, 113, 0.28), rgba(15, 23, 42, 0.98));
     }
     .massCloseBox .buttonTitle { color: #fecaca; }
+    /* Progress star strip — one star per grid tile */
+    #progressBar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 2px 0 6px;
+      min-height: 26px;
+    }
+    .progressStar {
+      font-size: 18px;
+      line-height: 1;
+      color: #4b5563;
+      opacity: 0.55;
+      user-select: none;
+      transition: color 0.25s, opacity 0.25s, text-shadow 0.25s;
+    }
+    .progressStar.done {
+      color: #facc15;
+      opacity: 1;
+      text-shadow: 0 0 8px rgba(250, 204, 21, 0.75);
+    }
+    .progressStar.current {
+      animation: starJump 0.9s infinite ease-in-out;
+    }
+    @keyframes starJump {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      25% { transform: translateY(-4px) rotate(-8deg); }
+      50% { transform: translateY(1px) rotate(6deg); }
+      75% { transform: translateY(-3px) rotate(-4deg); }
+    }
+    /* Master variable tiles + linked tiles */
+    .masterBox { border-color: rgba(250, 204, 21, 0.55); }
+    .varTag {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #facc15;
+    }
+    .varTag.linked { color: #a5b4fc; }
+    .varInput {
+      margin-top: 6px;
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(2, 6, 23, 0.85);
+      color: #e5e7eb;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .varInput:focus {
+      border-color: #facc15;
+      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
+    }
+    .varValue {
+      font-size: 12px;
+      color: #a5b4fc;
+      word-break: break-all;
+    }
+    .previewBadge {
+      align-self: flex-start;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(250, 204, 21, 0.5);
+      color: #facc15;
+    }
+    .previewBadge.linked {
+      border-color: rgba(165, 180, 252, 0.5);
+      color: #a5b4fc;
+    }
     #builderLayout {
       display: grid;
       grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
@@ -306,6 +380,7 @@
     </div>
     <div id="launcherView" class="view active">
       <h1>Launcher</h1>
+      <div id="progressBar"></div>
       <div id="grid"></div>
     </div>
     <div id="builderView" class="view">
@@ -322,13 +397,23 @@
           </div>
           <div class="row">
             <label for="btnURL">URL</label>
-            <input id="btnURL" placeholder="https://example.com">
+            <input id="btnURL" placeholder="https://example.com — use {{var}} to insert the variable">
           </div>
           <div class="row">
             <label for="btnMode">Open Mode</label>
             <select id="btnMode">
               <option value="tab">Open in New Tab</option>
               <option value="window">Open in New Window (Split-Screen Capable)</option>
+            </select>
+          </div>
+          <div class="row toggleRow">
+            <input type="checkbox" id="optMaster">
+            <label for="optMaster">Master variable (label becomes the variable name)</label>
+          </div>
+          <div class="row">
+            <label for="btnUsesVar">Uses Master Variable</label>
+            <select id="btnUsesVar">
+              <option value="">None</option>
             </select>
           </div>
           <div class="row toggleRow">
@@ -388,6 +473,63 @@ function loadConfig() {
   }
 }
 var config = loadConfig();
+
+// =========================================================
+// RUNTIME WORKFLOW STATE (never exported — resets each run)
+// =========================================================
+var varValues = {};     // master variable values, keyed by master label
+var openedSteps = {};   // button index -> true once opened
+var currentStep = -1;   // last opened step (its star jumps)
+
+function resetWorkflow() {
+  varValues = {};
+  openedSteps = {};
+  currentStep = -1;
+}
+
+// Which variable does this button read? Masters read their own label.
+function varNameFor(btn) {
+  return btn.isMaster ? btn.label : (btn.usesVar || "");
+}
+
+// Substitute variable into URL: {{var}} placeholder if present,
+// otherwise append the encoded value (search-prefix pattern).
+function resolveURL(btn) {
+  var name = varNameFor(btn);
+  if (!name) return btn.url;
+  var val = varValues[name] || "";
+  if (btn.url.indexOf("{{var}}") !== -1) {
+    return btn.url.split("{{var}}").join(encodeURIComponent(val));
+  }
+  return val ? btn.url + encodeURIComponent(val) : btn.url;
+}
+
+// Live-propagate a master value into every linked tile's readout
+function updateVarReadouts(name) {
+  var text = varValues[name] ? "→ " + varValues[name] : "(waiting for master input)";
+  document.querySelectorAll('[data-var-readout="' + name + '"]').forEach(function (el) {
+    el.textContent = text;
+  });
+}
+
+// =========================================================
+// PROGRESS STARS — grey/static until a tile is opened, then
+// yellow; the current step's star jumps around
+// =========================================================
+function renderProgress() {
+  var bar = document.getElementById("progressBar");
+  if (!bar) return;
+  bar.innerHTML = "";
+  config.buttons.forEach(function (btn, i) {
+    var s = document.createElement("span");
+    s.className = "progressStar";
+    s.textContent = "★";
+    s.title = "Step " + (i + 1) + ": " + (btn.label || "");
+    if (openedSteps[i]) s.classList.add("done");
+    if (i === currentStep) s.classList.add("current");
+    bar.appendChild(s);
+  });
+}
 
 // =========================================================
 // WINDOW TRACKING + MASS CLOSE
@@ -458,10 +600,24 @@ function renderLauncher() {
     empty.appendChild(emptyDesc);
     grid.appendChild(empty);
   } else {
-    config.buttons.forEach(function (btn) {
+    config.buttons.forEach(function (btn, index) {
       var a = document.createElement("a");
-      a.className = "buttonBox";
+      a.className = "buttonBox" + (btn.isMaster ? " masterBox" : "");
       a.href = btn.url;
+      var varName = varNameFor(btn);
+
+      if (btn.isMaster) {
+        var tag = document.createElement("div");
+        tag.className = "varTag";
+        tag.textContent = "★ master · " + btn.label;
+        a.appendChild(tag);
+      } else if (btn.usesVar) {
+        var ltag = document.createElement("div");
+        ltag.className = "varTag linked";
+        ltag.textContent = "⛓ uses · " + btn.usesVar;
+        a.appendChild(ltag);
+      }
+
       var btnTitle = document.createElement("div");
       btnTitle.className = "buttonTitle";
       btnTitle.textContent = btn.label || "";
@@ -470,17 +626,46 @@ function renderLauncher() {
       btnDesc.textContent = btn.desc || "";
       a.appendChild(btnTitle);
       a.appendChild(btnDesc);
+
+      if (btn.isMaster) {
+        // Master tile carries the shared input; typing propagates
+        // instantly to every tile linked to this variable.
+        var input = document.createElement("input");
+        input.className = "varInput";
+        input.type = "text";
+        input.placeholder = "Enter " + btn.label + "…";
+        input.value = varValues[btn.label] || "";
+        input.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); });
+        input.addEventListener("input", function () {
+          varValues[btn.label] = input.value.trim();
+          updateVarReadouts(btn.label);
+        });
+        a.appendChild(input);
+      } else if (btn.usesVar) {
+        var readout = document.createElement("div");
+        readout.className = "varValue";
+        readout.setAttribute("data-var-readout", btn.usesVar);
+        readout.textContent = varValues[btn.usesVar]
+          ? "→ " + varValues[btn.usesVar]
+          : "(waiting for master input)";
+        a.appendChild(readout);
+      }
+
       a.addEventListener("click", function (e) {
         e.preventDefault();
+        var url = resolveURL(btn);
         var mode = btn.mode || "tab";
         if (mode === "window") {
           var w = Math.floor(window.screen.width / 2);
           var h = window.screen.height;
           var left = window.screen.width - w;
-          openTracked(btn.url, "popup,width=" + w + ",height=" + h + ",left=" + left + ",top=0");
+          openTracked(url, "popup,width=" + w + ",height=" + h + ",left=" + left + ",top=0");
         } else {
-          openTracked(btn.url);
+          openTracked(url);
         }
+        openedSteps[index] = true;
+        currentStep = index;
+        renderProgress();
       });
       grid.appendChild(a);
     });
@@ -495,17 +680,14 @@ function renderLauncher() {
     mcTitle.textContent = "✕ Close All";
     var mcDesc = document.createElement("div");
     mcDesc.className = "buttonDesc";
-    mcDesc.textContent = "Close every window opened from this launcher";
+    mcDesc.textContent = "Close all opened windows & reset the workflow";
     mc.appendChild(mcTitle);
     mc.appendChild(mcDesc);
     mc.addEventListener("click", function () {
-      var n = closeAllWindows();
-      mcDesc.textContent = n
-        ? "Closed " + n + " window" + (n === 1 ? "" : "s")
-        : "Nothing open right now";
-      setTimeout(function () {
-        mcDesc.textContent = "Close every window opened from this launcher";
-      }, 2000);
+      closeAllWindows();
+      resetWorkflow();           // stars back to grey, variables cleared
+      renderLauncher();
+      renderProgress();
     });
     grid.appendChild(mc);
   }
@@ -516,8 +698,36 @@ function renderLauncher() {
 // =========================================================
 function deleteButton(index) {
   config.buttons.splice(index, 1);
+  resetWorkflow();               // indices shifted — restart progress
+  refreshVarSelect();
   renderLauncher();
+  renderProgress();
   renderBuilderPreview();
+}
+
+// Keep the "Uses Master Variable" dropdown in sync with the
+// master buttons currently defined (label = variable name).
+function refreshVarSelect() {
+  var sel = document.getElementById("btnUsesVar");
+  if (!sel) return;
+  var prev = sel.value;
+  sel.innerHTML = "";
+  var none = document.createElement("option");
+  none.value = "";
+  none.textContent = "None";
+  sel.appendChild(none);
+  var seen = {};
+  config.buttons.forEach(function (b) {
+    if (b.isMaster && b.label && !seen[b.label]) {
+      seen[b.label] = true;
+      var o = document.createElement("option");
+      o.value = b.label;
+      o.textContent = b.label;
+      sel.appendChild(o);
+    }
+  });
+  sel.value = prev;
+  if (sel.value !== prev) sel.value = "";
 }
 function renderBuilderPreview() {
   var preview = document.getElementById("builderPreview");
@@ -543,12 +753,23 @@ function renderBuilderPreview() {
     var desc = document.createElement("div");
     desc.className = "buttonDesc";
     desc.textContent = btn.desc || "";
+    var badge = null;
+    if (btn.isMaster) {
+      badge = document.createElement("div");
+      badge.className = "previewBadge";
+      badge.textContent = "★ master: " + btn.label;
+    } else if (btn.usesVar) {
+      badge = document.createElement("div");
+      badge.className = "previewBadge linked";
+      badge.textContent = "⛓ uses: " + btn.usesVar;
+    }
     var del = document.createElement("div");
     del.className = "deleteIcon";
     del.textContent = "✕";
     del.onclick = function () { deleteButton(index); };
     box.appendChild(title);
     box.appendChild(desc);
+    if (badge) box.appendChild(badge);
     box.appendChild(del);
     preview.appendChild(box);
   });
@@ -562,16 +783,37 @@ document.getElementById("addButton").addEventListener("click", function () {
   var desc = document.getElementById("btnDesc").value.trim();
   var url = document.getElementById("btnURL").value.trim();
   var mode = document.getElementById("btnMode").value;
+  var isMaster = document.getElementById("optMaster").checked;
+  var usesVar = isMaster ? "" : document.getElementById("btnUsesVar").value;
   if (!label || !url) {
     alert("Label and URL are required.");
     return;
   }
-  config.buttons.push({ label: label, desc: desc, url: url, mode: mode });
+  config.buttons.push({
+    label: label,
+    desc: desc,
+    url: url,
+    mode: mode,
+    isMaster: isMaster,
+    usesVar: usesVar
+  });
+  refreshVarSelect();
   renderLauncher();
+  renderProgress();
   renderBuilderPreview();
   document.getElementById("btnLabel").value = "";
   document.getElementById("btnDesc").value = "";
   document.getElementById("btnURL").value = "";
+  document.getElementById("optMaster").checked = false;
+  document.getElementById("btnUsesVar").value = "";
+  document.getElementById("btnUsesVar").disabled = false;
+});
+
+// Master and "uses variable" are mutually exclusive per button
+document.getElementById("optMaster").addEventListener("change", function () {
+  var sel = document.getElementById("btnUsesVar");
+  sel.disabled = this.checked;
+  if (this.checked) sel.value = "";
 });
 
 var massCloseToggle = document.getElementById("optMassClose");
@@ -618,7 +860,9 @@ document.getElementById("exportSelf").addEventListener("click", exportLauncher);
 // =========================================================
 // INITIAL RENDER
 // =========================================================
+refreshVarSelect();
 renderLauncher();
+renderProgress();
 renderBuilderPreview();
 </script>
 </body>
