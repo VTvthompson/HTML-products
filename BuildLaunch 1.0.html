@@ -475,6 +475,14 @@
             </select>
           </div>
           <div class="row toggleRow">
+            <input type="checkbox" id="optGate" checked>
+            <label for="optGate">Tier lock (linked button needs its variable first)</label>
+          </div>
+          <div class="row toggleRow">
+            <input type="checkbox" id="optEnforceLocks">
+            <label for="optEnforceLocks">Enforce tier locks (preview here; chosen again at export)</label>
+          </div>
+          <div class="row toggleRow">
             <input type="checkbox" id="optMassClose">
             <label for="optMassClose">"Close All" tile (always last in grid)</label>
           </div>
@@ -516,7 +524,7 @@ function b64encode(str) {
 function b64decode(str) {
   return decodeURIComponent(escape(atob(str)));
 }
-var DEFAULT_CONFIG = { title: "", buttons: [], settings: { massClose: true } };
+var DEFAULT_CONFIG = { title: "", buttons: [], settings: { massClose: true, enforceLocks: true } };
 function loadConfig() {
   var el = document.getElementById("configData");
   if (!el || !el.textContent.trim()) return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -764,8 +772,9 @@ function renderLauncher() {
         a.href = resolveURL(btn, index);
       });
 
-      // Tier gate: linked tiles stay locked until the variable exists
-      if (!btn.isMaster && btn.usesVar) {
+      // Tier gate: linked tiles stay locked until the variable exists.
+      // Only when this button opts in AND the launcher enforces locks.
+      if (!btn.isMaster && btn.usesVar && btn.gate !== false && config.settings.enforceLocks) {
         a.setAttribute("data-lock-var", btn.usesVar);
         if (!varValues[btn.usesVar]) a.classList.add("locked");
       }
@@ -856,6 +865,7 @@ function clearBuilderForm() {
   document.getElementById("btnURL").value = "";
   document.getElementById("btnMode").value = "tab";
   document.getElementById("btnVarAction").value = "url";
+  document.getElementById("optGate").checked = true;
   document.getElementById("optMaster").checked = false;
   var sel = document.getElementById("btnUsesVar");
   sel.value = "";
@@ -878,6 +888,7 @@ function startEdit(index) {
   document.getElementById("btnURL").value = b.url || "";
   document.getElementById("btnMode").value = b.mode || "tab";
   document.getElementById("btnVarAction").value = b.varAction || "url";
+  document.getElementById("optGate").checked = b.gate !== false;
   var m = document.getElementById("optMaster");
   var sel = document.getElementById("btnUsesVar");
   m.checked = !!b.isMaster;
@@ -968,7 +979,7 @@ function renderBuilderPreview() {
     } else if (btn.usesVar) {
       badge = document.createElement("div");
       badge.className = "previewBadge linked";
-      badge.textContent = "⛓ uses: " + btn.usesVar;
+      badge.textContent = "⛓ uses: " + btn.usesVar + (btn.gate !== false ? " 🔒" : " · no lock");
     }
     var copyBadge = null;
     if ((btn.varAction || "url") === "copy") {
@@ -1034,7 +1045,8 @@ document.getElementById("addButton").addEventListener("click", function () {
     mode: mode,
     varAction: varAction,
     isMaster: isMaster,
-    usesVar: usesVar
+    usesVar: usesVar,
+    gate: document.getElementById("optGate").checked
   };
   if (editIndex >= 0) {
     var old = config.buttons[editIndex];
@@ -1077,6 +1089,13 @@ massCloseToggle.addEventListener("change", function () {
   renderLauncher();
 });
 
+var enforceLocksToggle = document.getElementById("optEnforceLocks");
+enforceLocksToggle.checked = !!config.settings.enforceLocks;
+enforceLocksToggle.addEventListener("change", function () {
+  config.settings.enforceLocks = enforceLocksToggle.checked;
+  renderLauncher();
+});
+
 // =========================================================
 // EXPORTER — reconstructs the document from STATIC sources
 // only: the CSS text, the inert template markup, this script
@@ -1091,10 +1110,20 @@ function exportLauncher() {
   title = title.trim() || suggested;
   config.title = title;       // rides in json64, default for next export
 
+  // Locked build (trainees) or unlocked build (trusted analysts)?
+  var enforce = confirm(
+    "Enforce tier locks in this export?\n\n" +
+    "OK = LOCKED — steps gate until their variable is entered (trainees)\n" +
+    "Cancel = UNLOCKED — no gating, full freedom (trusted analysts)"
+  );
+
   var css = document.getElementById("appStyles").textContent;
   var js = document.getElementById("launcherCode").textContent;
   var staticHTML = document.getElementById("staticDOM").innerHTML;
+  var wasEnforced = config.settings.enforceLocks;
+  config.settings.enforceLocks = enforce;
   var cfg64 = b64encode(JSON.stringify(config));
+  config.settings.enforceLocks = wasEnforced; // builder session unchanged
   var safeTitle = title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   var html =
