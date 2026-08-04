@@ -166,15 +166,22 @@
       50% { transform: translateY(1px) rotate(6deg); }
       75% { transform: translateY(-3px) rotate(-4deg); }
     }
-    /* Master variable tiles + linked tiles */
-    .masterBox { border-color: rgba(250, 204, 21, 0.55); }
+    /* Master variable tiles (cyan edge) + linked tiles */
+    .masterBox { border-color: rgba(56, 189, 248, 0.7); }
+    /* Clipboard-mode tiles (yellow edge = value copied, not URL-combined) */
+    .copyBox { border-color: rgba(250, 204, 21, 0.65); }
+    .copyBox:hover {
+      border-color: #facc15;
+      background: radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), rgba(15, 23, 42, 0.95));
+    }
     .varTag {
       font-size: 10px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #facc15;
+      color: var(--accent);
     }
     .varTag.linked { color: #a5b4fc; }
+    .varTag.copy { color: #facc15; }
     .varInput {
       margin-top: 6px;
       width: 100%;
@@ -209,6 +216,10 @@
     .previewBadge.linked {
       border-color: rgba(165, 180, 252, 0.5);
       color: #a5b4fc;
+    }
+    .previewBadge.copy {
+      border-color: rgba(250, 204, 21, 0.5);
+      color: #facc15;
     }
     #builderLayout {
       display: grid;
@@ -436,6 +447,13 @@
               <option value="window">Open in New Window (Split-Screen Capable)</option>
             </select>
           </div>
+          <div class="row">
+            <label for="btnVarAction">Variable Handling</label>
+            <select id="btnVarAction">
+              <option value="url">Insert into URL ({{var}} or append)</option>
+              <option value="copy">Copy to clipboard on open (yellow tile)</option>
+            </select>
+          </div>
           <div class="row toggleRow">
             <input type="checkbox" id="optMaster">
             <label for="optMaster">Master variable (label becomes the variable name)</label>
@@ -509,12 +527,14 @@ var config = loadConfig();
 // =========================================================
 // RUNTIME WORKFLOW STATE (never exported — resets each run)
 // =========================================================
-var varValues = {};     // master variable values, keyed by master label
+var varValues = {};     // shared variable values, keyed by master label
+var localVals = {};     // per-tile values for tiles with no shared variable
 var openedSteps = {};   // button index -> true once opened
 var currentStep = -1;   // last opened step (its star jumps)
 
 function resetWorkflow() {
   varValues = {};
+  localVals = {};
   openedSteps = {};
   currentStep = -1;
 }
@@ -524,29 +544,55 @@ function varNameFor(btn) {
   return btn.isMaster ? btn.label : (btn.usesVar || "");
 }
 
+// Current value for a tile: shared variable if linked, else its own
+function valueFor(btn, index) {
+  var name = varNameFor(btn);
+  return name ? (varValues[name] || "") : (localVals[index] || "");
+}
+
 // Substitute variable into URL: {{var}} placeholder if present,
 // otherwise append the encoded value (search-prefix pattern).
-function resolveURL(btn) {
-  var name = varNameFor(btn);
-  if (!name) return btn.url;
-  var val = varValues[name] || "";
+// Clipboard-mode tiles never modify their URL.
+function resolveURL(btn, index) {
+  if ((btn.varAction || "url") === "copy") return btn.url;
+  var val = valueFor(btn, index);
   if (btn.url.indexOf("{{var}}") !== -1) {
     return btn.url.split("{{var}}").join(encodeURIComponent(val));
   }
   return val ? btn.url + encodeURIComponent(val) : btn.url;
 }
 
-// Live-propagate a master value into every linked tile's readout,
-// and lock/unlock tiles gated on that variable (tiered workflow:
-// a step cannot open until its required variable is obtained).
-function updateVarReadouts(name) {
-  var has = !!varValues[name];
-  document.querySelectorAll('[data-var-readout="' + name + '"]').forEach(function (el) {
-    el.textContent = has ? "→ " + varValues[name] : "🔒 requires " + name;
+// Set a shared variable: sync every tile input bound to it, and
+// lock/unlock gated tiles (tiered workflow: a step cannot open
+// until its required variable is obtained).
+function setVar(name, value, sourceEl) {
+  varValues[name] = value;
+  document.querySelectorAll('[data-var-input="' + name + '"]').forEach(function (el) {
+    if (el !== sourceEl) el.value = value;
   });
+  var has = !!value;
   document.querySelectorAll('[data-lock-var="' + name + '"]').forEach(function (el) {
     el.classList.toggle("locked", !has);
   });
+}
+
+// Clipboard support for sites whose URLs can't carry the variable
+function legacyCopy(text) {
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch (e) {}
+  document.body.removeChild(ta);
+}
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(function () { legacyCopy(text); });
+  } else {
+    legacyCopy(text);
+  }
 }
 
 // =========================================================
@@ -638,10 +684,13 @@ function renderLauncher() {
     grid.appendChild(empty);
   } else {
     config.buttons.forEach(function (btn, index) {
+      var isCopy = (btn.varAction || "url") === "copy";
       var a = document.createElement("a");
-      a.className = "buttonBox" + (btn.isMaster ? " masterBox" : "");
+      a.className = "buttonBox"
+        + (btn.isMaster ? " masterBox" : "")
+        + (isCopy ? " copyBox" : "");
       a.href = btn.url;
-      var varName = varNameFor(btn);
+      var vname = varNameFor(btn);
 
       if (btn.isMaster) {
         var tag = document.createElement("div");
@@ -654,6 +703,12 @@ function renderLauncher() {
         ltag.textContent = "⛓ uses · " + btn.usesVar;
         a.appendChild(ltag);
       }
+      if (isCopy) {
+        var ctag = document.createElement("div");
+        ctag.className = "varTag copy";
+        ctag.textContent = "📋 copies to clipboard";
+        a.appendChild(ctag);
+      }
 
       var btnTitle = document.createElement("div");
       btnTitle.className = "buttonTitle";
@@ -664,29 +719,31 @@ function renderLauncher() {
       a.appendChild(btnTitle);
       a.appendChild(btnDesc);
 
-      if (btn.isMaster) {
-        // Master tile carries the shared input; typing propagates
-        // instantly to every tile linked to this variable.
-        var input = document.createElement("input");
-        input.className = "varInput";
-        input.type = "text";
-        input.placeholder = "Enter " + btn.label + "…";
-        input.value = varValues[btn.label] || "";
-        input.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); });
+      // Every tile has an input slot for the variable it needs.
+      // Linked/master inputs share one value and sync live; the
+      // rest keep a tile-local value.
+      var input = document.createElement("input");
+      input.className = "varInput";
+      input.type = "text";
+      if (vname) {
+        input.placeholder = "Enter " + vname + "…";
+        input.value = varValues[vname] || "";
+        input.setAttribute("data-var-input", vname);
         input.addEventListener("input", function () {
-          varValues[btn.label] = input.value.trim();
-          updateVarReadouts(btn.label);
+          setVar(vname, input.value.trim(), input);
         });
-        a.appendChild(input);
-      } else if (btn.usesVar) {
-        var readout = document.createElement("div");
-        readout.className = "varValue";
-        readout.setAttribute("data-var-readout", btn.usesVar);
-        readout.textContent = varValues[btn.usesVar]
-          ? "→ " + varValues[btn.usesVar]
-          : "🔒 requires " + btn.usesVar;
-        a.appendChild(readout);
-        // Tier gate: locked until the variable is obtained upstream
+      } else {
+        input.placeholder = isCopy ? "Value to copy…" : "Optional value…";
+        input.value = localVals[index] || "";
+        input.addEventListener("input", function () {
+          localVals[index] = input.value.trim();
+        });
+      }
+      input.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); });
+      a.appendChild(input);
+
+      // Tier gate: linked tiles stay locked until the variable exists
+      if (!btn.isMaster && btn.usesVar) {
         a.setAttribute("data-lock-var", btn.usesVar);
         if (!varValues[btn.usesVar]) a.classList.add("locked");
       }
@@ -698,7 +755,14 @@ function renderLauncher() {
           setTimeout(function () { a.classList.remove("shake"); }, 350);
           return;
         }
-        var url = resolveURL(btn);
+        var val = valueFor(btn, index);
+        if (isCopy && val) {
+          copyToClipboard(val);
+          var prevDesc = btnDesc.textContent;
+          btnDesc.textContent = "📋 Copied — paste it inside the site";
+          setTimeout(function () { btnDesc.textContent = prevDesc; }, 2500);
+        }
+        var url = resolveURL(btn, index);
         var mode = btn.mode || "tab";
         if (mode === "window") {
           var w = Math.floor(window.screen.width / 2);
@@ -762,6 +826,7 @@ function clearBuilderForm() {
   document.getElementById("btnDesc").value = "";
   document.getElementById("btnURL").value = "";
   document.getElementById("btnMode").value = "tab";
+  document.getElementById("btnVarAction").value = "url";
   document.getElementById("optMaster").checked = false;
   var sel = document.getElementById("btnUsesVar");
   sel.value = "";
@@ -783,6 +848,7 @@ function startEdit(index) {
   document.getElementById("btnDesc").value = b.desc || "";
   document.getElementById("btnURL").value = b.url || "";
   document.getElementById("btnMode").value = b.mode || "tab";
+  document.getElementById("btnVarAction").value = b.varAction || "url";
   var m = document.getElementById("optMaster");
   var sel = document.getElementById("btnUsesVar");
   m.checked = !!b.isMaster;
@@ -875,6 +941,12 @@ function renderBuilderPreview() {
       badge.className = "previewBadge linked";
       badge.textContent = "⛓ uses: " + btn.usesVar;
     }
+    var copyBadge = null;
+    if ((btn.varAction || "url") === "copy") {
+      copyBadge = document.createElement("div");
+      copyBadge.className = "previewBadge copy";
+      copyBadge.textContent = "📋 clipboard";
+    }
     var controls = document.createElement("div");
     controls.className = "pvControls";
     var up = document.createElement("span");
@@ -905,6 +977,7 @@ function renderBuilderPreview() {
     box.appendChild(title);
     box.appendChild(desc);
     if (badge) box.appendChild(badge);
+    if (copyBadge) box.appendChild(copyBadge);
     box.appendChild(controls);
     preview.appendChild(box);
   });
@@ -918,6 +991,7 @@ document.getElementById("addButton").addEventListener("click", function () {
   var desc = document.getElementById("btnDesc").value.trim();
   var url = document.getElementById("btnURL").value.trim();
   var mode = document.getElementById("btnMode").value;
+  var varAction = document.getElementById("btnVarAction").value;
   var isMaster = document.getElementById("optMaster").checked;
   var usesVar = isMaster ? "" : document.getElementById("btnUsesVar").value;
   if (!label || !url) {
@@ -929,6 +1003,7 @@ document.getElementById("addButton").addEventListener("click", function () {
     desc: desc,
     url: url,
     mode: mode,
+    varAction: varAction,
     isMaster: isMaster,
     usesVar: usesVar
   };
