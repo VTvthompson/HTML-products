@@ -572,7 +572,11 @@ function valueFor(btn, index) {
 // otherwise append the encoded value (search-prefix pattern).
 // Clipboard-mode tiles never modify their URL.
 function resolveURL(btn, index) {
-  if ((btn.varAction || "url") === "copy") return btn.url;
+  // Copy-mode tiles never carry the value in the URL — but scrub
+  // any stray {{var}} placeholder so it can't leak into the address
+  if ((btn.varAction || "url") === "copy") {
+    return btn.url.split("{{var}}").join("");
+  }
   var val = valueFor(btn, index);
   if (btn.url.indexOf("{{var}}") !== -1) {
     return btn.url.split("{{var}}").join(encodeURIComponent(val));
@@ -1044,6 +1048,17 @@ document.getElementById("addButton").addEventListener("click", function () {
   if (!label || !url) {
     alert("Label and URL are required.");
     return;
+  }
+  // Contradiction check: URL wants the value inserted, but handling
+  // is set to clipboard — the placeholder would be scrubbed at runtime
+  if (varAction === "copy" && url.indexOf("{{var}}") !== -1) {
+    var proceed = confirm(
+      "Heads up: this URL contains {{var}} but Variable Handling is set " +
+      "to 'Copy to clipboard'.\n\nThe {{var}} placeholder will be removed " +
+      "from the URL and the value copied instead.\n\n" +
+      "OK = keep clipboard mode · Cancel = go back and fix"
+    );
+    if (!proceed) return;
   }
   var entry = {
     label: label,
