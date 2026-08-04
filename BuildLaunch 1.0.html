@@ -328,30 +328,60 @@
       color: #6b7280;
       font-style: italic;
     }
-    .deleteIcon {
-      all: unset !important;
-      position: absolute !important;
-      top: 6px !important;
-      right: 6px !important;
-      z-index: 9999 !important;
-      font-size: 18px !important;
-      line-height: 18px !important;
-      color: var(--accent) !important;
-      cursor: pointer !important;
-      text-shadow: 0 0 6px rgba(56, 189, 248, 0.8) !important;
-      opacity: 0.9 !important;
-      flex: none !important;
-      display: inline-block !important;
-      background: none !important;
-      border: none !important;
-      padding: 0 !important;
-      margin: 0 !important;
+    /* Builder preview item controls (reorder / edit / delete) */
+    .pvControls {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      display: flex;
+      gap: 10px;
+      z-index: 5;
     }
-    .deleteIcon:hover {
-      color: #ffffff !important;
-      transform: scale(1.25) !important;
-      text-shadow: 0 0 12px rgba(56, 189, 248, 1) !important;
+    .pvBtn {
+      font-size: 15px;
+      line-height: 1;
+      color: var(--accent);
+      cursor: pointer;
+      user-select: none;
+      text-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+      transition: transform 0.1s, color 0.1s;
     }
+    .pvBtn:hover {
+      color: #ffffff;
+      transform: scale(1.2);
+      text-shadow: 0 0 12px rgba(56, 189, 248, 1);
+    }
+    .pvBtn.danger {
+      color: var(--danger);
+      text-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+    }
+    .pvBtn.disabled {
+      opacity: 0.25;
+      pointer-events: none;
+    }
+    .builderPreviewItem.editing {
+      border-color: #facc15;
+      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4), 0 18px 40px rgba(15, 23, 42, 0.7);
+    }
+    .hidden { display: none !important; }
+    /* Tier locking — tile needs its variable before it opens */
+    .buttonBox.locked {
+      opacity: 0.45;
+      filter: grayscale(0.5);
+      cursor: not-allowed;
+    }
+    .buttonBox.locked:hover {
+      transform: none;
+      border-color: var(--border-subtle);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+      background: var(--card-bg);
+    }
+    @keyframes shakeNo {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    .buttonBox.shake { animation: shakeNo 0.3s ease; }
     @media (max-width: 800px) {
       body { overflow-y: auto; }
       #builderLayout { grid-template-columns: minmax(0, 1fr); }
@@ -422,6 +452,7 @@
           </div>
           <div class="buttonsRow">
             <button id="addButton" class="primary">Add Button</button>
+            <button id="cancelEdit" class="hidden">Cancel</button>
             <button id="exportSelf">Export New Launcher</button>
           </div>
         </div>
@@ -457,13 +488,14 @@ function b64encode(str) {
 function b64decode(str) {
   return decodeURIComponent(escape(atob(str)));
 }
-var DEFAULT_CONFIG = { buttons: [], settings: { massClose: true } };
+var DEFAULT_CONFIG = { title: "", buttons: [], settings: { massClose: true } };
 function loadConfig() {
   var el = document.getElementById("configData");
   if (!el || !el.textContent.trim()) return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   try {
     var cfg = JSON.parse(b64decode(el.textContent.trim()));
     return {
+      title: typeof cfg.title === "string" ? cfg.title : "",
       buttons: Array.isArray(cfg.buttons) ? cfg.buttons : [],
       settings: Object.assign({}, DEFAULT_CONFIG.settings, cfg.settings || {})
     };
@@ -504,11 +536,16 @@ function resolveURL(btn) {
   return val ? btn.url + encodeURIComponent(val) : btn.url;
 }
 
-// Live-propagate a master value into every linked tile's readout
+// Live-propagate a master value into every linked tile's readout,
+// and lock/unlock tiles gated on that variable (tiered workflow:
+// a step cannot open until its required variable is obtained).
 function updateVarReadouts(name) {
-  var text = varValues[name] ? "→ " + varValues[name] : "(waiting for master input)";
+  var has = !!varValues[name];
   document.querySelectorAll('[data-var-readout="' + name + '"]').forEach(function (el) {
-    el.textContent = text;
+    el.textContent = has ? "→ " + varValues[name] : "🔒 requires " + name;
+  });
+  document.querySelectorAll('[data-lock-var="' + name + '"]').forEach(function (el) {
+    el.classList.toggle("locked", !has);
   });
 }
 
@@ -647,12 +684,20 @@ function renderLauncher() {
         readout.setAttribute("data-var-readout", btn.usesVar);
         readout.textContent = varValues[btn.usesVar]
           ? "→ " + varValues[btn.usesVar]
-          : "(waiting for master input)";
+          : "🔒 requires " + btn.usesVar;
         a.appendChild(readout);
+        // Tier gate: locked until the variable is obtained upstream
+        a.setAttribute("data-lock-var", btn.usesVar);
+        if (!varValues[btn.usesVar]) a.classList.add("locked");
       }
 
       a.addEventListener("click", function (e) {
         e.preventDefault();
+        if (a.classList.contains("locked")) {
+          a.classList.add("shake");
+          setTimeout(function () { a.classList.remove("shake"); }, 350);
+          return;
+        }
         var url = resolveURL(btn);
         var mode = btn.mode || "tab";
         if (mode === "window") {
@@ -696,8 +741,75 @@ function renderLauncher() {
 // =========================================================
 // RENDER BUILDER PREVIEW (neon delete icons)
 // =========================================================
+var editIndex = -1;
+
+function masterNameSet() {
+  var m = {};
+  config.buttons.forEach(function (b) { if (b.isMaster && b.label) m[b.label] = true; });
+  return m;
+}
+
+// Clear usesVar links that point at a master that no longer exists
+function scrubLinks() {
+  var m = masterNameSet();
+  config.buttons.forEach(function (b) {
+    if (b.usesVar && !m[b.usesVar]) b.usesVar = "";
+  });
+}
+
+function clearBuilderForm() {
+  document.getElementById("btnLabel").value = "";
+  document.getElementById("btnDesc").value = "";
+  document.getElementById("btnURL").value = "";
+  document.getElementById("btnMode").value = "tab";
+  document.getElementById("optMaster").checked = false;
+  var sel = document.getElementById("btnUsesVar");
+  sel.value = "";
+  sel.disabled = false;
+}
+
+function exitEditMode() {
+  editIndex = -1;
+  clearBuilderForm();
+  document.getElementById("addButton").textContent = "Add Button";
+  document.getElementById("cancelEdit").classList.add("hidden");
+}
+
+function startEdit(index) {
+  var b = config.buttons[index];
+  editIndex = index;
+  refreshVarSelect();
+  document.getElementById("btnLabel").value = b.label || "";
+  document.getElementById("btnDesc").value = b.desc || "";
+  document.getElementById("btnURL").value = b.url || "";
+  document.getElementById("btnMode").value = b.mode || "tab";
+  var m = document.getElementById("optMaster");
+  var sel = document.getElementById("btnUsesVar");
+  m.checked = !!b.isMaster;
+  sel.disabled = !!b.isMaster;
+  sel.value = b.usesVar || "";
+  document.getElementById("addButton").textContent = "Save Changes";
+  document.getElementById("cancelEdit").classList.remove("hidden");
+  renderBuilderPreview();
+}
+
+function moveButton(index, dir) {
+  var target = index + dir;
+  if (target < 0 || target >= config.buttons.length) return;
+  if (editIndex >= 0) exitEditMode();
+  var tmp = config.buttons[index];
+  config.buttons[index] = config.buttons[target];
+  config.buttons[target] = tmp;
+  resetWorkflow();               // sequence changed — restart progress
+  renderLauncher();
+  renderProgress();
+  renderBuilderPreview();
+}
+
 function deleteButton(index) {
   config.buttons.splice(index, 1);
+  scrubLinks();
+  if (editIndex >= 0) exitEditMode();
   resetWorkflow();               // indices shifted — restart progress
   refreshVarSelect();
   renderLauncher();
@@ -763,14 +875,37 @@ function renderBuilderPreview() {
       badge.className = "previewBadge linked";
       badge.textContent = "⛓ uses: " + btn.usesVar;
     }
-    var del = document.createElement("div");
-    del.className = "deleteIcon";
+    var controls = document.createElement("div");
+    controls.className = "pvControls";
+    var up = document.createElement("span");
+    up.className = "pvBtn" + (index === 0 ? " disabled" : "");
+    up.textContent = "▲";
+    up.title = "Move up";
+    up.onclick = function () { moveButton(index, -1); };
+    var down = document.createElement("span");
+    down.className = "pvBtn" + (index === config.buttons.length - 1 ? " disabled" : "");
+    down.textContent = "▼";
+    down.title = "Move down";
+    down.onclick = function () { moveButton(index, 1); };
+    var edit = document.createElement("span");
+    edit.className = "pvBtn";
+    edit.textContent = "✎";
+    edit.title = "Edit";
+    edit.onclick = function () { startEdit(index); };
+    var del = document.createElement("span");
+    del.className = "pvBtn danger";
     del.textContent = "✕";
+    del.title = "Delete";
     del.onclick = function () { deleteButton(index); };
+    controls.appendChild(up);
+    controls.appendChild(down);
+    controls.appendChild(edit);
+    controls.appendChild(del);
+    if (index === editIndex) box.classList.add("editing");
     box.appendChild(title);
     box.appendChild(desc);
     if (badge) box.appendChild(badge);
-    box.appendChild(del);
+    box.appendChild(controls);
     preview.appendChild(box);
   });
 }
@@ -789,24 +924,39 @@ document.getElementById("addButton").addEventListener("click", function () {
     alert("Label and URL are required.");
     return;
   }
-  config.buttons.push({
+  var entry = {
     label: label,
     desc: desc,
     url: url,
     mode: mode,
     isMaster: isMaster,
     usesVar: usesVar
-  });
+  };
+  if (editIndex >= 0) {
+    var old = config.buttons[editIndex];
+    // Renaming a master relinks every dependent button to the new name
+    if (old.isMaster && isMaster && old.label !== label) {
+      config.buttons.forEach(function (b) {
+        if (b.usesVar === old.label) b.usesVar = label;
+      });
+    }
+    config.buttons[editIndex] = entry;
+    scrubLinks();
+    resetWorkflow();
+    exitEditMode();
+  } else {
+    config.buttons.push(entry);
+    clearBuilderForm();
+  }
   refreshVarSelect();
   renderLauncher();
   renderProgress();
   renderBuilderPreview();
-  document.getElementById("btnLabel").value = "";
-  document.getElementById("btnDesc").value = "";
-  document.getElementById("btnURL").value = "";
-  document.getElementById("optMaster").checked = false;
-  document.getElementById("btnUsesVar").value = "";
-  document.getElementById("btnUsesVar").disabled = false;
+});
+
+document.getElementById("cancelEdit").addEventListener("click", function () {
+  exitEditMode();
+  renderBuilderPreview();
 });
 
 // Master and "uses variable" are mutually exclusive per button
@@ -831,14 +981,21 @@ massCloseToggle.addEventListener("change", function () {
 // cleanly forever (same structure, same ids).
 // =========================================================
 function exportLauncher() {
+  var suggested = config.title || "Custom Launcher";
+  var title = prompt("Title for the exported launcher:", suggested);
+  if (title === null) return; // user cancelled export
+  title = title.trim() || suggested;
+  config.title = title;       // rides in json64, default for next export
+
   var css = document.getElementById("appStyles").textContent;
   var js = document.getElementById("launcherCode").textContent;
   var staticHTML = document.getElementById("staticDOM").innerHTML;
   var cfg64 = b64encode(JSON.stringify(config));
+  var safeTitle = title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   var html =
     "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n" +
-    "<title>Custom Launcher Builder</title>\n" +
+    "<title>" + safeTitle + "</title>\n" +
     "<style id=\"appStyles\">" + css + "</style>\n" +
     "</head>\n<body>\n" +
     "<script id=\"configData\" type=\"application/json+base64\">" + cfg64 + "</scr" + "ipt>\n" +
@@ -851,7 +1008,8 @@ function exportLauncher() {
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a");
   a.href = url;
-  a.download = "launcher.html";
+  var fname = title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-");
+  a.download = (fname || "launcher") + ".html";
   a.click();
   URL.revokeObjectURL(url);
 }
