@@ -860,6 +860,7 @@ function scrubLinks() {
 }
 
 function clearBuilderForm() {
+  if (!document.getElementById("builderPanel")) return;
   document.getElementById("btnLabel").value = "";
   document.getElementById("btnDesc").value = "";
   document.getElementById("btnURL").value = "";
@@ -874,12 +875,14 @@ function clearBuilderForm() {
 
 function exitEditMode() {
   editIndex = -1;
+  if (!document.getElementById("builderPanel")) return;
   clearBuilderForm();
   document.getElementById("addButton").textContent = "Add Button";
   document.getElementById("cancelEdit").classList.add("hidden");
 }
 
 function startEdit(index) {
+  if (!document.getElementById("builderPanel")) return;
   var b = config.buttons[index];
   editIndex = index;
   refreshVarSelect();
@@ -1024,8 +1027,12 @@ function renderBuilderPreview() {
 }
 
 // =========================================================
-// BUILDER CONTROLS
+// BUILDER CONTROLS — wired only when the builder exists in
+// this build. Sealed (launcher-only) exports have no builder
+// DOM, so none of this attaches and locks can't be disabled.
 // =========================================================
+if (document.getElementById("builderPanel")) {
+
 document.getElementById("addButton").addEventListener("click", function () {
   var label = document.getElementById("btnLabel").value.trim();
   var desc = document.getElementById("btnDesc").value.trim();
@@ -1096,6 +1103,8 @@ enforceLocksToggle.addEventListener("change", function () {
   renderLauncher();
 });
 
+} // end builder-only wiring
+
 // =========================================================
 // EXPORTER — reconstructs the document from STATIC sources
 // only: the CSS text, the inert template markup, this script
@@ -1117,9 +1126,34 @@ function exportLauncher() {
     "Cancel = UNLOCKED — no gating, full freedom (trusted analysts)"
   );
 
+  // Ship the builder, or seal it? A sealed export contains no
+  // builder DOM at all — locks can't be toggled off or re-exported
+  // away, because the machinery simply isn't in the file.
+  var includeBuilder = confirm(
+    "Include the Builder in this export?\n\n" +
+    "OK = FULL — launcher + builder (editable, self-replicating)\n" +
+    "Cancel = SEALED — launcher only (settings are permanent)"
+  );
+
   var css = document.getElementById("appStyles").textContent;
   var js = document.getElementById("launcherCode").textContent;
-  var staticHTML = document.getElementById("staticDOM").innerHTML;
+
+  var tplEl = document.getElementById("staticDOM");
+  var staticHTML;
+  if (includeBuilder) {
+    staticHTML = tplEl.innerHTML;
+  } else {
+    // Mutate a CLONE of the static template — never the template
+    var frag = tplEl.content.cloneNode(true);
+    var bv = frag.querySelector("#builderView");
+    if (bv) bv.remove();
+    var tabs = frag.querySelector("#modeTabs");
+    if (tabs) tabs.remove();
+    var tmp = document.createElement("div");
+    tmp.appendChild(frag);
+    staticHTML = tmp.innerHTML;
+  }
+
   var wasEnforced = config.settings.enforceLocks;
   config.settings.enforceLocks = enforce;
   var cfg64 = b64encode(JSON.stringify(config));
@@ -1146,7 +1180,8 @@ function exportLauncher() {
   a.click();
   URL.revokeObjectURL(url);
 }
-document.getElementById("exportSelf").addEventListener("click", exportLauncher);
+var exportBtn = document.getElementById("exportSelf");
+if (exportBtn) exportBtn.addEventListener("click", exportLauncher);
 
 // =========================================================
 // INITIAL RENDER
