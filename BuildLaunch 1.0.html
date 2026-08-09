@@ -789,29 +789,35 @@ const closeAllWindows = () => {
 // ensemble twinkle never visibly repeats.
 // =========================================================
 const CONSTELLATIONS = [
-  { // Big Dipper (Ursa Major) — Alkaid → Mizar → Alioth → Megrez + bowl
-    at: [4, 8, 22, 16],
-    stars: [[2,30,1.9],[16,18,2.2],[30,12,1.8],[44,10,3.3],[48,34,2.4],[70,36,2.4],[66,8,1.8]],
+  { // Big Dipper (Ursa Major) — catalog RA/Dec, chart-mirrored (east = left)
+    // Alkaid Mizar Alioth Megrez Phecda Merak Dubhe
+    at: [4, 8, 24, 13],
+    stars: [[0.0,100.0,1.9],[14.2,54.8,2.0],[32.3,46.5,1.8],[55.6,37.9,3.3],[68.6,64.8,2.4],[100.0,43.2,2.4],[98.9,0.0,1.8]],
     lines: [[0,1],[1,2],[2,3],[3,6],[6,5],[5,4],[4,3]] },
   { // Cassiopeia — the W
-    at: [40, 5, 16, 9],
-    stars: [[0,20,2.3],[22,38,2.2],[44,14,2.4],[68,34,2.7],[92,10,3.4]],
+    // Caph Schedar Gamma Cas Ruchbah Segin
+    at: [40, 5, 17, 9],
+    stars: [[100.0,63.4,2.3],[70.2,100.0,2.2],[54.8,41.4,2.4],[27.2,48.1,2.7],[0.0,0.0,3.4]],
     lines: [[0,1],[1,2],[2,3],[3,4]] },
-  { // Cygnus — the Northern Cross (Deneb at the head)
-    at: [68, 10, 15, 24],
-    stars: [[50,0,1.3],[50,38,2.2],[50,96,3.1],[88,52,2.5],[14,22,2.9]],
+  { // Cygnus — the Northern Cross
+    // Deneb Sadr Albireo Gienah Delta Cyg
+    at: [68, 10, 15, 18],
+    stars: [[6.4,0.0,1.3],[31.7,29.0,2.2],[100.0,100.0,3.1],[0.0,65.3,2.5],[81.1,0.9,2.9]],
     lines: [[0,1],[1,2],[4,1],[1,3]] },
-  { // Lyra — Vega + the little parallelogram
-    at: [55, 30, 7, 9],
-    stars: [[20,0,0.03],[24,22,4.3],[40,28,4.3],[28,60,3.5],[48,66,3.2]],
+  { // Lyra — Vega + parallelogram
+    // Vega Zeta Lyr Delta Lyr Sheliak Sulafat
+    at: [55, 30, 6, 8],
+    stars: [[100.0,0.0,0.03],[64.5,19.4,4.4],[20.2,30.9,4.2],[40.4,89.0,3.5],[0.0,100.0,3.2]],
     lines: [[0,1],[1,2],[2,4],[4,3],[3,1]] },
-  { // Orion — Betelgeuse/Bellatrix shoulders, the Belt, Rigel/Saiph feet
-    at: [76, 54, 18, 34],
-    stars: [[70,10,0.5],[30,14,1.6],[58,48,1.7],[48,50,1.7],[38,52,2.2],[64,88,2.1],[26,84,0.2]],
+  { // Orion — shoulders, Belt, feet
+    // Betelgeuse Bellatrix Alnitak Alnilam Mintaka Saiph Rigel
+    at: [76, 52, 19, 32],
+    stars: [[0.0,0.0,0.5],[74.0,6.2,1.6],[35.5,54.7,1.8],[46.5,50.4,1.7],[57.0,45.1,2.2],[18.2,100.0,2.1],[100.0,91.4,0.1]],
     lines: [[0,1],[0,2],[1,4],[2,3],[3,4],[2,5],[4,6],[5,6]] },
-  { // Scorpius — head fan, Antares, the hook to Shaula's stinger
-    at: [8, 50, 16, 40],
-    stars: [[16,0,2.6],[8,12,2.3],[4,26,2.9],[26,34,1.0],[34,48,2.8],[38,62,2.3],[34,74,3.0],[30,84,3.6],[44,94,1.9],[64,88,1.6],[60,82,2.7]],
+  { // Scorpius — head fan to Shaula's stinger
+    // Acrab Dschubba Pi Sco Antares Tau Sco Eps Sco Mu Sco Zeta Sco Sargas Shaula Lesath
+    at: [6, 55, 24, 27],
+    stars: [[93.4,0.0,2.6],[98.5,12.1,2.3],[100.0,27.2,2.9],[69.0,28.5,1.1],[62.4,36.2,2.8],[47.9,62.4,2.3],[46.2,78.7,3.0],[43.4,97.2,3.6],[0.0,100.0,1.9],[3.8,74.6,1.6],[6.6,75.4,2.7]],
     lines: [[0,1],[1,2],[1,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10]] },
 ];
 (() => {
