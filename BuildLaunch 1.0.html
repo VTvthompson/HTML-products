@@ -403,6 +403,16 @@
       border-color: #facc15;
       box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4), 0 18px 40px rgba(15, 23, 42, 0.7);
     }
+    /* Drag & drop reorder — arrows stay as the keyboard/precision path */
+    .builderPreviewItem { cursor: grab; }
+    .builderPreviewItem:active { cursor: grabbing; }
+    .builderPreviewItem.dragging { opacity: 0.45; }
+    .builderPreviewItem.dropBefore {
+      box-shadow: 0 -8px 0 -4px var(--accent), 0 18px 40px rgba(15, 23, 42, 0.7);
+    }
+    .builderPreviewItem.dropAfter {
+      box-shadow: 0 8px 0 -4px var(--accent), 0 18px 40px rgba(15, 23, 42, 0.7);
+    }
     .hidden { display: none !important; }
     /* Tier locking — tile needs its variable before it opens.
        Content dims but the input stays vivid: it IS the unlock. */
@@ -888,6 +898,7 @@ const renderLauncher = () => {
 // RENDER BUILDER PREVIEW (neon delete icons)
 // =========================================================
 let editIndex = -1;
+let dragIndex = -1;   // preview item currently being dragged
 const masterNameSet = () => {
   const names = new Set();
   for (const b of config.buttons) {
@@ -947,6 +958,20 @@ const moveButton = (index, dir) => {
   if (target < 0 || target >= config.buttons.length) return;
   if (editIndex >= 0) exitEditMode();
   [config.buttons[index], config.buttons[target]] = [config.buttons[target], config.buttons[index]];
+  resetWorkflow();               // sequence changed — restart progress
+  renderLauncher();
+  renderProgress();
+  renderBuilderPreview();
+};
+// Drag-and-drop reorder: move item `from` so it sits at slot `to`
+// (to may be config.buttons.length, meaning "drop at the end")
+const moveButtonTo = (from, to) => {
+  if (from < 0 || from >= config.buttons.length) return;
+  const target = to > from ? to - 1 : to;   // account for the removal shift
+  if (target === from) return;              // no net movement
+  if (editIndex >= 0) exitEditMode();
+  const [item] = config.buttons.splice(from, 1);
+  config.buttons.splice(target, 0, item);
   resetWorkflow();               // sequence changed — restart progress
   renderLauncher();
   renderProgress();
@@ -1047,6 +1072,41 @@ const renderBuilderPreview = () => {
     if (badge) box.appendChild(badge);
     if (copyBadge) box.appendChild(copyBadge);
     box.appendChild(controls);
+    // Drag & drop reorder (arrows above remain the keyboard path)
+    box.draggable = true;
+    box.addEventListener("dragstart", (e) => {
+      dragIndex = index;
+      box.classList.add("dragging");
+      try {
+        e.dataTransfer.setData("text/plain", String(index));
+        e.dataTransfer.effectAllowed = "move";
+      } catch { /* synthetic events may lack dataTransfer */ }
+    });
+    box.addEventListener("dragend", () => {
+      dragIndex = -1;
+      preview.querySelectorAll(".builderPreviewItem").forEach((el) => {
+        el.classList.remove("dragging", "dropBefore", "dropAfter");
+      });
+    });
+    box.addEventListener("dragover", (e) => {
+      if (dragIndex < 0 || index === dragIndex) return;
+      e.preventDefault();          // required to allow the drop
+      const before = (e.offsetY || 0) < (box.offsetHeight || 0) / 2;
+      box.classList.toggle("dropBefore", before);
+      box.classList.toggle("dropAfter", !before);
+    });
+    box.addEventListener("dragleave", () => {
+      box.classList.remove("dropBefore", "dropAfter");
+    });
+    box.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();         // don't also trigger the container's end-drop
+      if (dragIndex < 0 || index === dragIndex) return;
+      const before = box.classList.contains("dropBefore");
+      const from = dragIndex;
+      dragIndex = -1;
+      moveButtonTo(from, index + (before ? 0 : 1));
+    });
     preview.appendChild(box);
   });
 };
@@ -1132,6 +1192,18 @@ enforceLocksToggle.checked = Boolean(config.settings.enforceLocks);
 enforceLocksToggle.addEventListener("change", () => {
   config.settings.enforceLocks = enforceLocksToggle.checked;
   renderLauncher();
+});
+// Dropping on empty preview space (below the items) = move to the end
+const previewEl = document.getElementById("builderPreview");
+previewEl.addEventListener("dragover", (e) => {
+  if (dragIndex >= 0) e.preventDefault();
+});
+previewEl.addEventListener("drop", (e) => {
+  e.preventDefault();
+  if (dragIndex < 0) return;
+  const from = dragIndex;
+  dragIndex = -1;
+  moveButtonTo(from, config.buttons.length);
 });
 } // end builder-only wiring
 // =========================================================
