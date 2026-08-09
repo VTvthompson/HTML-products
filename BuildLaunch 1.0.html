@@ -99,6 +99,7 @@
     }
     .view { display: none; }
     .view.active { display: block; }
+    #guideView h1,
     #launcherView h1,
     #builderView h1 {
       font-size: 22px;
@@ -237,6 +238,68 @@
     body.starsFrozen .star { animation: none; opacity: 0.35; }
     body.starsFrozen .star.bright { opacity: 0.6; }
     body.starsOff #stars { display: none; }
+    /* Guide view */
+    #guideWrap {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: calc(100vh - 160px);
+      max-height: calc(100dvh - 160px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
+      padding-right: 4px;
+    }
+    .guideCard {
+      background: var(--card-bg);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+      flex-shrink: 0;
+    }
+    .guideCard h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .guideCard p {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.65;
+      margin-bottom: 8px;
+    }
+    .guideCard p:last-child { margin-bottom: 0; }
+    .guideCard ul { margin-left: 18px; }
+    .guideCard li {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.65;
+      margin-bottom: 6px;
+    }
+    .guideCard strong { color: #f9fafb; }
+    .guideCard code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12px;
+      background: rgba(2, 6, 23, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 6px;
+      padding: 1px 6px;
+      color: #facc15;
+    }
+    .guideExample {
+      background: rgba(2, 6, 23, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin: 8px 0;
+      font-size: 13px;
+      color: #e5e7eb;
+      line-height: 1.7;
+    }
     /* Master variable tiles (cyan edge) + linked tiles */
     .masterBox { border-color: rgba(56, 189, 248, 0.7); }
     /* Clipboard-mode tiles (yellow edge = value copied, not URL-combined) */
@@ -500,15 +563,18 @@
        ignores these rules */
     #grid::-webkit-scrollbar,
     #builderPanel::-webkit-scrollbar,
+    #guideWrap::-webkit-scrollbar,
     #builderPreview::-webkit-scrollbar { width: 10px; }
     #grid::-webkit-scrollbar-track,
     #builderPanel::-webkit-scrollbar-track,
+    #guideWrap::-webkit-scrollbar-track,
     #builderPreview::-webkit-scrollbar-track {
       background: rgba(15, 23, 42, 0.5);
       border-radius: 5px;
     }
     #grid::-webkit-scrollbar-thumb,
     #builderPanel::-webkit-scrollbar-thumb,
+    #guideWrap::-webkit-scrollbar-thumb,
     #builderPreview::-webkit-scrollbar-thumb {
       background: #38bdf8;
       border-radius: 5px;
@@ -517,7 +583,7 @@
       body { overflow-y: auto; }
       #builderLayout { grid-template-columns: minmax(0, 1fr); }
       /* one natural page scroll on small screens, not nested scrollers */
-      #grid, #builderPanel, #builderPreview { max-height: none; }
+      #grid, #builderPanel, #builderPreview, #guideWrap { max-height: none; }
     }
     /* Respect OS "reduce motion" for the progress star (static glow
        instead of jumping). The starfield itself is handled by the
@@ -547,8 +613,88 @@
   <div id="stars"></div>
   <div id="app">
     <div id="modeTabs">
+      <button data-mode="guide">Guide</button>
       <button data-mode="launcher" class="active">Launcher</button>
       <button data-mode="builder">Builder</button>
+    </div>
+    <div id="guideView" class="view">
+      <h1>Guide</h1>
+      <div id="guideWrap">
+        <div class="guideCard">
+          <h2>What This Is</h2>
+          <p>A self-contained launcher for tiered workflows. Every tile opens a destination; values you type ride along into URLs or your clipboard; and the entire platform lives in one HTML file that can rebuild itself. No install, no server, no account.</p>
+        </div>
+        <div class="guideCard">
+          <h2>The Launcher</h2>
+          <ul>
+            <li>Tiles open in a new tab, or a right-half window (split-screen capable) if built that way.</li>
+            <li><strong>Cyan-edged tiles are masters.</strong> The value typed there feeds every tile linked to it, live. A master's label is its variable name.</li>
+            <li><strong>Dashed-border tiles are tier-locked.</strong> They stay shut until their master variable is filled — they shake if you try early.</li>
+            <li><strong>Yellow-edged tiles copy the value to your clipboard</strong> instead of the URL. Paste it inside the site once it opens.</li>
+            <li>The star strip tracks your progress; the bouncing star is your current step. Press Enter inside any tile's input to open it from the keyboard.</li>
+            <li><strong>✕ Close All</strong> closes every window this launcher opened and resets the run.</li>
+            <li><strong>Stars On / Frozen / Off</strong> — freeze or hide the background if motion bothers you (migraines, vestibular disorders, concussion recovery).</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>The Builder</h2>
+          <ul>
+            <li><strong>Label / Description</strong> — what the tile shows. A master's label doubles as its variable name.</li>
+            <li><strong>URL</strong> — the destination. Put <code>{{var}}</code> where the value should land; with no placeholder, the value is appended to the end.</li>
+            <li><strong>Open Mode</strong> — new tab, or a half-screen window for split-screen work.</li>
+            <li><strong>Variable Handling</strong> — insert into the URL, or copy to clipboard on open (yellow tile).</li>
+            <li><strong>Master variable</strong> — makes this tile the source its linked tiles read from. <strong>Uses Master Variable</strong> links a tile to a master.</li>
+            <li><strong>Tier lock</strong> — the linked tile stays locked until its variable exists. <strong>Enforce tier locks</strong> previews enforcement here; the real decision is asked again at export.</li>
+            <li><strong>Preview:</strong> drag tiles to reorder (arrows work too), ✎ edits, ✕ deletes. Reordering resets run progress — the sequence changed.</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>URL Combining — Jump Straight to Records</h2>
+          <p>The core trick. Most databases carry the search term or record ID in the URL. Find that URL once, swap the ID for <code>{{var}}</code>, and every analyst after you lands directly on the record — no landing page, no search box, no clicks.</p>
+          <div class="guideExample">
+            Master tile <strong>Case ID</strong> · URL: <code>https://records.example/report?id={{var}}</code><br>
+            Type <code>2026-04471</code> → opens <code>https://records.example/report?id=2026-04471</code>
+          </div>
+          <p>If the site just wants the value at the end, skip the placeholder: <code>https://search.example/q=</code> plus the typed value works the same way.</p>
+        </div>
+        <div class="guideCard">
+          <h2>The JavaScript Test</h2>
+          <p>Some databases run their search in JavaScript and never touch the URL — combining can't reach those. The quickest test: <strong>go into the database, click on a report, and watch the address bar.</strong></p>
+          <ul>
+            <li>Report title or ID shows up in the URL → URL mode works. Copy that URL, replace the ID with <code>{{var}}</code>, done.</li>
+            <li>URL stays generic no matter which report you open → the site renders in JavaScript. Use <strong>Clipboard mode</strong> (yellow tile): the value is copied the moment the tile opens — paste it into the site's own search.</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>Export Options</h2>
+          <ul>
+            <li><strong>Locked vs Unlocked</strong> — locked builds gate each step until its variable is entered (trainees). Unlocked builds trust the analyst.</li>
+            <li><strong>Full vs Sealed</strong> — Full ships the builder inside the export: editable and self-replicating. Sealed ships the launcher and this guide, but no builder — settings are permanent because the machinery to change them isn't in the file.</li>
+          </ul>
+          <p>Every full export can re-export itself forever. Each file is a complete, independent copy of the platform.</p>
+        </div>
+        <div class="guideCard">
+          <h2>Known Limits (2026)</h2>
+          <ul>
+            <li><strong>Google and Microsoft services</strong> (Workspace, 365, and friends) ship strict cross-origin isolation (COOP). Tabs opened into those services sever the tie to their opener — <strong>Close All can't reach them.</strong> Close those by hand; that's the browser protecting you, not a defect here.</li>
+            <li>Close All only tracks windows from the current session. Reload the launcher and it starts a fresh list.</li>
+            <li>Your browser may ask once to allow pop-ups for this file. Allow it.</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>Track Record</h2>
+          <p>Three years in development across dozens of revisions, built for and refined inside multiple intelligence communities. One deployment posted proven metrics of <strong>75 analyst-hours saved per week across a ten-person team</strong>, and cut new-analyst upskill time <strong>from six months to under two</strong>.</p>
+        </div>
+        <div class="guideCard">
+          <h2>The Sky</h2>
+          <ul>
+            <li>Six real constellations — Big Dipper, Cassiopeia, Cygnus, Lyra, Orion, Scorpius — plotted from actual star-catalog coordinates (RA/Dec, projected and aspect-corrected). Even the slight kink in Orion's belt is real.</li>
+            <li>Star size and glow map to true stellar magnitude — Vega, Rigel and Betelgeuse outshine the field here exactly as they do outside.</li>
+            <li>One artistic license: Orion and Scorpius never share a real sky — Orion sets as the Scorpion rises. In this one, they've made peace.</li>
+            <li>The 200 background stars are generated mathematically on every load — random positions, random 2–6 second twinkle cycles. No two sessions ever show the same sky.</li>
+          </ul>
+        </div>
+      </div>
     </div>
     <div id="launcherView" class="view active">
       <h1>Launcher</h1>
@@ -1406,7 +1552,7 @@ const exportLauncher = () => {
     // Mutate a CLONE of the static template — never the template
     const frag = tplEl.content.cloneNode(true);
     frag.querySelector("#builderView")?.remove();
-    frag.querySelector("#modeTabs")?.remove();
+    frag.querySelector('#modeTabs [data-mode="builder"]')?.remove();
     const tmp = document.createElement("div");
     tmp.appendChild(frag);
     staticHTML = tmp.innerHTML;
