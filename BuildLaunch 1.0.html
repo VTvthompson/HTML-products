@@ -185,6 +185,42 @@
       50% { transform: translateY(1px) rotate(6deg); }
       75% { transform: translateY(-3px) rotate(-4deg); }
     }
+    /* Stars mode control (On / Frozen / Off) */
+    #starsCtl {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+    #starsCtlLabel {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9ca3af;
+    }
+    #starsCtl button {
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.9);
+      color: #9ca3af;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    #starsCtl button.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    #starsNote {
+      flex-basis: 100%;
+      font-size: 11px;
+      color: #6b7280;
+    }
+    body.starsFrozen .star { animation: none; opacity: 0.35; }
+    body.starsOff #stars { display: none; }
     /* Master variable tiles (cyan edge) + linked tiles */
     .masterBox { border-color: rgba(56, 189, 248, 0.7); }
     /* Clipboard-mode tiles (yellow edge = value copied, not URL-combined) */
@@ -467,6 +503,17 @@
       /* one natural page scroll on small screens, not nested scrollers */
       #grid, #builderPanel, #builderPreview { max-height: none; }
     }
+    /* Respect OS "reduce motion" for the progress star (static glow
+       instead of jumping). The starfield itself is handled by the
+       Stars control — OS setting only picks its DEFAULT, so an
+       explicit "On" choice still wins. */
+    @media (prefers-reduced-motion: reduce) {
+      .progressStar.current {
+        animation: none;
+        color: var(--accent);
+        text-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
+      }
+    }
   </style>
 </head>
 <body>
@@ -489,6 +536,13 @@
     </div>
     <div id="launcherView" class="view active">
       <h1>Launcher</h1>
+      <div id="starsCtl">
+        <span id="starsCtlLabel">Stars</span>
+        <button type="button" data-stars="on">On</button>
+        <button type="button" data-stars="frozen">Frozen</button>
+        <button type="button" data-stars="off">Off</button>
+        <span id="starsNote">Moving stars can aggravate migraines, inner-ear (vestibular) disorders, and concussion recovery. If that's you, use Frozen or Off.</span>
+      </div>
       <div id="progressBar"></div>
       <div id="grid"></div>
     </div>
@@ -724,6 +778,37 @@ const closeAllWindows = () => {
     starsContainer.appendChild(s);
   }
 })();
+// =========================================================
+// STARS MODE — On / Frozen / Off. Explicit choice persists
+// per browser; with no saved choice, the OS reduced-motion
+// setting picks the default. Lives in the launcher view, so
+// sealed exports keep it too.
+// =========================================================
+const STARS_KEY = "launcher.starsMode";
+const readStarsMode = () => {
+  try {
+    const v = localStorage.getItem(STARS_KEY);
+    if (v === "on" || v === "frozen" || v === "off") return v;
+  } catch { /* storage unavailable in some file:// setups */ }
+  try {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return "frozen";
+  } catch { /* no matchMedia — default on */ }
+  return "on";
+};
+const applyStarsMode = (mode) => {
+  document.body.classList.toggle("starsFrozen", mode === "frozen");
+  document.body.classList.toggle("starsOff", mode === "off");
+  document.querySelectorAll("#starsCtl button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.stars === mode);
+  });
+};
+document.querySelectorAll("#starsCtl button").forEach((b) => {
+  b.addEventListener("click", () => {
+    try { localStorage.setItem(STARS_KEY, b.dataset.stars); } catch { /* best effort */ }
+    applyStarsMode(b.dataset.stars);
+  });
+});
+applyStarsMode(readStarsMode());
 // =========================================================
 // MODE SWITCHING
 // =========================================================
