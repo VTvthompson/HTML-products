@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Custom Launcher Builder</title>
@@ -407,7 +407,6 @@
       body { overflow-y: auto; }
       #builderLayout { grid-template-columns: minmax(0, 1fr); }
     }
-
 	#builderPreview {
 	  max-height: 70vh;
 	  overflow-y: auto;
@@ -415,7 +414,6 @@
 	  scrollbar-width: thin;
 	  scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
 	}
-
 	#builderPreview::-webkit-scrollbar {
 	  width: 10px;
 	}
@@ -427,11 +425,9 @@
 	  background: #38bdf8;
 	  border-radius: 5px;
 	}
-
 	#builderPreview .builderPreviewItem {
 	  flex-shrink: 0;
 	}
-
 	#grid {
 	  max-height: calc(100vh - 220px);
 	  overflow-y: auto;
@@ -439,7 +435,6 @@
 	  scrollbar-width: thin;
 	  scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
 	}
-
 	#grid::-webkit-scrollbar {
 	  width: 10px;
 	}
@@ -454,13 +449,11 @@
   </style>
 </head>
 <body>
-
 <!-- =========================================================
      CONFIG — json64. The ONLY thing that changes between
      exports. Base64-encoded JSON of user variables/buttons.
 ========================================================== -->
 <script id="configData" type="application/json+base64">eyJidXR0b25zIjpbXSwic2V0dGluZ3MiOnsibWFzc0Nsb3NlIjp0cnVlfX0=</script>
-
 <!-- =========================================================
      STATIC DOM — inert <template>. The browser NEVER parses,
      mutates, or "translates" template contents. The live UI
@@ -543,10 +536,8 @@
     </div>
   </div>
 </template>
-
 <!-- Live UI mounts here (clone of staticDOM) -->
 <div id="mount"></div>
-
 <script id="launcherCode">
 "use strict";
 // =========================================================
@@ -554,331 +545,312 @@
 // Everything below only ever touches the CLONE. The template
 // stays pristine and is the sole export source for markup.
 // =========================================================
-(function boot() {
-  var tpl = document.getElementById("staticDOM");
+(() => {
+  const tpl = document.getElementById("staticDOM");
   document.getElementById("mount").appendChild(tpl.content.cloneNode(true));
 })();
-
 // =========================================================
-// CONFIG (json64) — decode once at boot, encode on export
+// CONFIG (json64) — decode once at boot, encode on export.
+// UTF-8-safe via TextEncoder/TextDecoder (the old
+// unescape/escape trick is deprecated).
 // =========================================================
-function b64encode(str) {
-  return btoa(unescape(encodeURIComponent(str)));
-}
-function b64decode(str) {
-  return decodeURIComponent(escape(atob(str)));
-}
-var DEFAULT_CONFIG = { title: "", buttons: [], settings: { massClose: true, enforceLocks: true } };
-function loadConfig() {
-  var el = document.getElementById("configData");
-  if (!el || !el.textContent.trim()) return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+const b64encode = (str) => {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (const byte of bytes) bin += String.fromCharCode(byte);
+  return btoa(bin);
+};
+const b64decode = (str) => {
+  const bytes = Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+};
+const DEFAULT_CONFIG = { title: "", buttons: [], settings: { massClose: true, enforceLocks: true } };
+const loadConfig = () => {
+  const el = document.getElementById("configData");
+  if (!el?.textContent.trim()) return structuredClone(DEFAULT_CONFIG);
   try {
-    var cfg = JSON.parse(b64decode(el.textContent.trim()));
+    const cfg = JSON.parse(b64decode(el.textContent.trim()));
     return {
       title: typeof cfg.title === "string" ? cfg.title : "",
       buttons: Array.isArray(cfg.buttons) ? cfg.buttons : [],
-      settings: Object.assign({}, DEFAULT_CONFIG.settings, cfg.settings || {})
+      settings: { ...DEFAULT_CONFIG.settings, ...cfg.settings }
     };
-  } catch (e) {
-    console.warn("configData corrupt, falling back to defaults:", e);
-    return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  } catch (err) {
+    console.warn("configData corrupt, falling back to defaults:", err);
+    return structuredClone(DEFAULT_CONFIG);
   }
-}
-var config = loadConfig();
-
+};
+const config = loadConfig();
 // =========================================================
 // RUNTIME WORKFLOW STATE (never exported — resets each run)
 // =========================================================
-var varValues = {};     // shared variable values, keyed by master label
-var localVals = {};     // per-tile values for tiles with no shared variable
-var openedSteps = {};   // button index -> true once opened
-var currentStep = -1;   // last opened step (its star jumps)
-
-function resetWorkflow() {
+let varValues = {};           // shared variable values, keyed by master label
+let localVals = {};           // per-tile values for tiles with no shared variable
+let openedSteps = new Set();  // button indices opened so far
+let currentStep = -1;         // last opened step (its star jumps)
+const resetWorkflow = () => {
   varValues = {};
   localVals = {};
-  openedSteps = {};
+  openedSteps = new Set();
   currentStep = -1;
-}
-
+};
 // Which variable does this button read? Masters read their own label.
-function varNameFor(btn) {
-  return btn.isMaster ? btn.label : (btn.usesVar || "");
-}
-
+const varNameFor = (btn) => (btn.isMaster ? btn.label : (btn.usesVar || ""));
 // Current value for a tile: shared variable if linked, else its own
-function valueFor(btn, index) {
-  var name = varNameFor(btn);
+const valueFor = (btn, index) => {
+  const name = varNameFor(btn);
   return name ? (varValues[name] || "") : (localVals[index] || "");
-}
-
+};
 // Substitute variable into URL: {{var}} placeholder if present,
 // otherwise append the encoded value (search-prefix pattern).
 // Clipboard-mode tiles never modify their URL.
-function resolveURL(btn, index) {
+const resolveURL = (btn, index) => {
   // Copy-mode tiles never carry the value in the URL — but scrub
   // any stray {{var}} placeholder so it can't leak into the address
   if ((btn.varAction || "url") === "copy") {
-    return btn.url.split("{{var}}").join("");
+    return btn.url.replaceAll("{{var}}", "");
   }
-  var val = valueFor(btn, index);
-  if (btn.url.indexOf("{{var}}") !== -1) {
-    return btn.url.split("{{var}}").join(encodeURIComponent(val));
+  const val = valueFor(btn, index);
+  if (btn.url.includes("{{var}}")) {
+    return btn.url.replaceAll("{{var}}", encodeURIComponent(val));
   }
   return val ? btn.url + encodeURIComponent(val) : btn.url;
-}
-
+};
 // Set a shared variable: sync every tile input bound to it, and
 // lock/unlock gated tiles (tiered workflow: a step cannot open
 // until its required variable is obtained).
-function setVar(name, value, sourceEl) {
+const setVar = (name, value, sourceEl) => {
   varValues[name] = value;
-  document.querySelectorAll('[data-var-input="' + name + '"]').forEach(function (el) {
+  document.querySelectorAll(`[data-var-input="${name}"]`).forEach((el) => {
     if (el !== sourceEl) el.value = value;
   });
-  var has = !!value;
-  document.querySelectorAll('[data-lock-var="' + name + '"]').forEach(function (el) {
+  const has = Boolean(value);
+  document.querySelectorAll(`[data-lock-var="${name}"]`).forEach((el) => {
     el.classList.toggle("locked", !has);
   });
-}
-
-// Clipboard support for sites whose URLs can't carry the variable
-function legacyCopy(text) {
-  var ta = document.createElement("textarea");
+};
+// Clipboard support for sites whose URLs can't carry the variable.
+// execCommand("copy") is deprecated but kept ONLY as a fallback for
+// non-secure (http:) contexts where navigator.clipboard is undefined.
+const legacyCopy = (text) => {
+  const ta = document.createElement("textarea");
   ta.value = text;
   ta.style.position = "fixed";
   ta.style.opacity = "0";
   document.body.appendChild(ta);
   ta.select();
-  try { document.execCommand("copy"); } catch (e) {}
-  document.body.removeChild(ta);
-}
-function copyToClipboard(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).catch(function () { legacyCopy(text); });
+  try { document.execCommand("copy"); } catch { /* best effort */ }
+  ta.remove();
+};
+const copyToClipboard = (text) => {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
   } else {
     legacyCopy(text);
   }
-}
-
+};
 // =========================================================
 // PROGRESS STARS — grey/static until a tile is opened, then
 // yellow; the current step's star jumps around
 // =========================================================
-function renderProgress() {
-  var bar = document.getElementById("progressBar");
+const renderProgress = () => {
+  const bar = document.getElementById("progressBar");
   if (!bar) return;
-  bar.innerHTML = "";
-  config.buttons.forEach(function (btn, i) {
-    var s = document.createElement("span");
+  bar.replaceChildren();
+  config.buttons.forEach((btn, i) => {
+    const s = document.createElement("span");
     s.className = "progressStar";
     s.textContent = "★";
-    s.title = "Step " + (i + 1) + ": " + (btn.label || "");
-    if (openedSteps[i]) s.classList.add("done");
+    s.title = `Step ${i + 1}: ${btn.label || ""}`;
+    if (openedSteps.has(i)) s.classList.add("done");
     if (i === currentStep) s.classList.add("current");
     bar.appendChild(s);
   });
-}
-
+};
 // =========================================================
 // WINDOW TRACKING + MASS CLOSE
 // =========================================================
-var openedWindows = [];
-function openTracked(url, features) {
-  var w = features ? window.open(url, "_blank", features) : window.open(url, "_blank");
+const openedWindows = [];
+const openTracked = (url, features) => {
+  const w = features ? window.open(url, "_blank", features) : window.open(url, "_blank");
   if (w) openedWindows.push(w);
   return w;
-}
-function closeAllWindows() {
-  var n = 0;
+};
+const closeAllWindows = () => {
+  let n = 0;
   while (openedWindows.length) {
-    var w = openedWindows.pop();
+    const w = openedWindows.pop();
     if (w && !w.closed) { w.close(); n++; }
   }
   return n;
-}
-
+};
 // =========================================================
 // STARFIELD
 // =========================================================
-(function starfield() {
-  var starsContainer = document.getElementById("stars");
-  for (var i = 0; i < 200; i++) {
-    var s = document.createElement("div");
+(() => {
+  const starsContainer = document.getElementById("stars");
+  for (let i = 0; i < 200; i++) {
+    const s = document.createElement("div");
     s.className = "star";
-    s.style.top = Math.random() * 100 + "%";
-    s.style.left = Math.random() * 100 + "%";
-    s.style.animationDelay = Math.random() * 3 + "s";
+    s.style.top = `${Math.random() * 100}%`;
+    s.style.left = `${Math.random() * 100}%`;
+    s.style.animationDelay = `${Math.random() * 3}s`;
     starsContainer.appendChild(s);
   }
 })();
-
 // =========================================================
 // MODE SWITCHING
 // =========================================================
-document.querySelectorAll("#modeTabs button").forEach(function (btn) {
-  btn.addEventListener("click", function () {
-    var mode = btn.getAttribute("data-mode");
-    document.querySelectorAll("#modeTabs button").forEach(function (b) { b.classList.remove("active"); });
+document.querySelectorAll("#modeTabs button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const mode = btn.dataset.mode;
+    document.querySelectorAll("#modeTabs button").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
-    document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); });
-    var view = document.getElementById(mode + "View");
-    if (view) view.classList.add("active");
+    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+    document.getElementById(`${mode}View`)?.classList.add("active");
   });
 });
-
 // =========================================================
 // RENDER LAUNCHER (mass close tile always appended LAST,
 // plus CSS order:9999 as a hard guarantee)
 // =========================================================
-function renderLauncher() {
-  var grid = document.getElementById("grid");
+const renderLauncher = () => {
+  const grid = document.getElementById("grid");
   if (!grid) return;
-  grid.innerHTML = "";
-
+  grid.replaceChildren();
   if (!config.buttons.length) {
-    var empty = document.createElement("div");
+    const empty = document.createElement("div");
     empty.className = "buttonBox";
-    var emptyTitle = document.createElement("div");
+    const emptyTitle = document.createElement("div");
     emptyTitle.className = "buttonTitle";
     emptyTitle.textContent = "No buttons yet";
-    var emptyDesc = document.createElement("div");
+    const emptyDesc = document.createElement("div");
     emptyDesc.className = "buttonDesc";
     emptyDesc.textContent = "Use the Builder tab to add some.";
-    empty.appendChild(emptyTitle);
-    empty.appendChild(emptyDesc);
+    empty.append(emptyTitle, emptyDesc);
     grid.appendChild(empty);
   } else {
-    config.buttons.forEach(function (btn, index) {
-      var isCopy = (btn.varAction || "url") === "copy";
-      var a = document.createElement("a");
+    config.buttons.forEach((btn, index) => {
+      const isCopy = (btn.varAction || "url") === "copy";
+      const a = document.createElement("a");
       a.className = "buttonBox"
         + (btn.isMaster ? " masterBox" : "")
         + (isCopy ? " copyBox" : "");
       a.href = btn.url;
-      var vname = varNameFor(btn);
-
+      const vname = varNameFor(btn);
       if (btn.isMaster) {
-        var tag = document.createElement("div");
+        const tag = document.createElement("div");
         tag.className = "varTag";
-        tag.textContent = "★ master · " + btn.label;
+        tag.textContent = `★ master · ${btn.label}`;
         a.appendChild(tag);
       } else if (btn.usesVar) {
-        var ltag = document.createElement("div");
+        const ltag = document.createElement("div");
         ltag.className = "varTag linked";
-        ltag.textContent = "⛓ uses · " + btn.usesVar;
+        ltag.textContent = `⛓ uses · ${btn.usesVar}`;
         a.appendChild(ltag);
       }
       if (isCopy) {
-        var ctag = document.createElement("div");
+        const ctag = document.createElement("div");
         ctag.className = "varTag copy";
         ctag.textContent = "📋 copies to clipboard";
         a.appendChild(ctag);
       }
-
-      var btnTitle = document.createElement("div");
+      const btnTitle = document.createElement("div");
       btnTitle.className = "buttonTitle";
       btnTitle.textContent = btn.label || "";
-      var btnDesc = document.createElement("div");
+      const btnDesc = document.createElement("div");
       btnDesc.className = "buttonDesc";
       btnDesc.textContent = btn.desc || "";
-      a.appendChild(btnTitle);
-      a.appendChild(btnDesc);
-
+      a.append(btnTitle, btnDesc);
       // Every tile has an input slot for the variable it needs.
       // Linked/master inputs share one value and sync live; the
       // rest keep a tile-local value.
-      var input = document.createElement("input");
+      const input = document.createElement("input");
       input.className = "varInput";
       input.type = "text";
       if (vname) {
         input.placeholder = btn.usesVar
-          ? "Enter " + vname + " to unlock…"
-          : "Enter " + vname + "…";
+          ? `Enter ${vname} to unlock…`
+          : `Enter ${vname}…`;
         input.value = varValues[vname] || "";
         input.setAttribute("data-var-input", vname);
-        input.addEventListener("input", function () {
+        input.addEventListener("input", () => {
           setVar(vname, input.value.trim(), input);
         });
       } else {
         input.placeholder = isCopy ? "Value to copy…" : "Optional value…";
         input.value = localVals[index] || "";
-        input.addEventListener("input", function () {
+        input.addEventListener("input", () => {
           localVals[index] = input.value.trim();
         });
       }
-      input.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); });
+      input.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
       // Enter in the input opens the tile (keyboard = user gesture)
-      input.addEventListener("keydown", function (e) {
+      input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") { e.preventDefault(); a.click(); }
       });
       a.appendChild(input);
-
       // Keep href in sync so middle-click / open-in-new-tab gets the
       // substituted URL instead of the raw template
-      a.addEventListener("mousedown", function () {
+      a.addEventListener("mousedown", () => {
         a.href = resolveURL(btn, index);
       });
-
       // Tier gate: linked tiles stay locked until the variable exists.
       // Only when this button opts in AND the launcher enforces locks.
       if (!btn.isMaster && btn.usesVar && btn.gate !== false && config.settings.enforceLocks) {
         a.setAttribute("data-lock-var", btn.usesVar);
         if (!varValues[btn.usesVar]) a.classList.add("locked");
       }
-
-      a.addEventListener("click", function (e) {
+      a.addEventListener("click", (e) => {
         e.preventDefault();
         if (a.classList.contains("locked")) {
           a.classList.add("shake");
-          setTimeout(function () { a.classList.remove("shake"); }, 350);
+          setTimeout(() => a.classList.remove("shake"), 350);
           return;
         }
-        var val = valueFor(btn, index);
+        const val = valueFor(btn, index);
         // URL needs a value it doesn't have yet — don't open a broken link
-        if (!isCopy && btn.url.indexOf("{{var}}") !== -1 && !val) {
+        if (!isCopy && btn.url.includes("{{var}}") && !val) {
           a.classList.add("shake");
-          setTimeout(function () { a.classList.remove("shake"); }, 350);
+          setTimeout(() => a.classList.remove("shake"), 350);
           input.focus();
           return;
         }
         if (isCopy && val) {
           copyToClipboard(val);
-          var prevDesc = btnDesc.textContent;
+          const prevDesc = btnDesc.textContent;
           btnDesc.textContent = "📋 Copied — paste it inside the site";
-          setTimeout(function () { btnDesc.textContent = prevDesc; }, 2500);
+          setTimeout(() => { btnDesc.textContent = prevDesc; }, 2500);
         }
-        var url = resolveURL(btn, index);
-        var mode = btn.mode || "tab";
+        const url = resolveURL(btn, index);
+        const mode = btn.mode || "tab";
         if (mode === "window") {
-          var w = Math.floor(window.screen.width / 2);
-          var h = window.screen.height;
-          var left = window.screen.width - w;
-          openTracked(url, "popup,width=" + w + ",height=" + h + ",left=" + left + ",top=0");
+          const w = Math.floor(window.screen.width / 2);
+          const h = window.screen.height;
+          const left = window.screen.width - w;
+          openTracked(url, `popup,width=${w},height=${h},left=${left},top=0`);
         } else {
           openTracked(url);
         }
-        openedSteps[index] = true;
+        openedSteps.add(index);
         currentStep = index;
         renderProgress();
       });
       grid.appendChild(a);
     });
   }
-
   // Mass close tile — appended after every button, every render
   if (config.settings.massClose) {
-    var mc = document.createElement("div");
+    const mc = document.createElement("div");
     mc.className = "buttonBox massCloseBox";
-    var mcTitle = document.createElement("div");
+    const mcTitle = document.createElement("div");
     mcTitle.className = "buttonTitle";
     mcTitle.textContent = "✕ Close All";
-    var mcDesc = document.createElement("div");
+    const mcDesc = document.createElement("div");
     mcDesc.className = "buttonDesc";
     mcDesc.textContent = "Close all opened windows & reset the workflow";
-    mc.appendChild(mcTitle);
-    mc.appendChild(mcDesc);
-    mc.addEventListener("click", function () {
+    mc.append(mcTitle, mcDesc);
+    mc.addEventListener("click", () => {
       closeAllWindows();
       resetWorkflow();           // stars back to grey, variables cleared
       renderLauncher();
@@ -886,28 +858,26 @@ function renderLauncher() {
     });
     grid.appendChild(mc);
   }
-}
-
+};
 // =========================================================
 // RENDER BUILDER PREVIEW (neon delete icons)
 // =========================================================
-var editIndex = -1;
-
-function masterNameSet() {
-  var m = {};
-  config.buttons.forEach(function (b) { if (b.isMaster && b.label) m[b.label] = true; });
-  return m;
-}
-
+let editIndex = -1;
+const masterNameSet = () => {
+  const names = new Set();
+  for (const b of config.buttons) {
+    if (b.isMaster && b.label) names.add(b.label);
+  }
+  return names;
+};
 // Clear usesVar links that point at a master that no longer exists
-function scrubLinks() {
-  var m = masterNameSet();
-  config.buttons.forEach(function (b) {
-    if (b.usesVar && !m[b.usesVar]) b.usesVar = "";
-  });
-}
-
-function clearBuilderForm() {
+const scrubLinks = () => {
+  const names = masterNameSet();
+  for (const b of config.buttons) {
+    if (b.usesVar && !names.has(b.usesVar)) b.usesVar = "";
+  }
+};
+const clearBuilderForm = () => {
   if (!document.getElementById("builderPanel")) return;
   document.getElementById("btnLabel").value = "";
   document.getElementById("btnDesc").value = "";
@@ -916,22 +886,20 @@ function clearBuilderForm() {
   document.getElementById("btnVarAction").value = "url";
   document.getElementById("optGate").checked = true;
   document.getElementById("optMaster").checked = false;
-  var sel = document.getElementById("btnUsesVar");
+  const sel = document.getElementById("btnUsesVar");
   sel.value = "";
   sel.disabled = false;
-}
-
-function exitEditMode() {
+};
+const exitEditMode = () => {
   editIndex = -1;
   if (!document.getElementById("builderPanel")) return;
   clearBuilderForm();
   document.getElementById("addButton").textContent = "Add Button";
   document.getElementById("cancelEdit").classList.add("hidden");
-}
-
-function startEdit(index) {
+};
+const startEdit = (index) => {
   if (!document.getElementById("builderPanel")) return;
-  var b = config.buttons[index];
+  const b = config.buttons[index];
   editIndex = index;
   refreshVarSelect();
   document.getElementById("btnLabel").value = b.label || "";
@@ -940,30 +908,26 @@ function startEdit(index) {
   document.getElementById("btnMode").value = b.mode || "tab";
   document.getElementById("btnVarAction").value = b.varAction || "url";
   document.getElementById("optGate").checked = b.gate !== false;
-  var m = document.getElementById("optMaster");
-  var sel = document.getElementById("btnUsesVar");
-  m.checked = !!b.isMaster;
-  sel.disabled = !!b.isMaster;
+  const m = document.getElementById("optMaster");
+  const sel = document.getElementById("btnUsesVar");
+  m.checked = Boolean(b.isMaster);
+  sel.disabled = Boolean(b.isMaster);
   sel.value = b.usesVar || "";
   document.getElementById("addButton").textContent = "Save Changes";
   document.getElementById("cancelEdit").classList.remove("hidden");
   renderBuilderPreview();
-}
-
-function moveButton(index, dir) {
-  var target = index + dir;
+};
+const moveButton = (index, dir) => {
+  const target = index + dir;
   if (target < 0 || target >= config.buttons.length) return;
   if (editIndex >= 0) exitEditMode();
-  var tmp = config.buttons[index];
-  config.buttons[index] = config.buttons[target];
-  config.buttons[target] = tmp;
+  [config.buttons[index], config.buttons[target]] = [config.buttons[target], config.buttons[index]];
   resetWorkflow();               // sequence changed — restart progress
   renderLauncher();
   renderProgress();
   renderBuilderPreview();
-}
-
-function deleteButton(index) {
+};
+const deleteButton = (index) => {
   config.buttons.splice(index, 1);
   scrubLinks();
   if (editIndex >= 0) exitEditMode();
@@ -972,131 +936,120 @@ function deleteButton(index) {
   renderLauncher();
   renderProgress();
   renderBuilderPreview();
-}
-
+};
 // Keep the "Uses Master Variable" dropdown in sync with the
 // master buttons currently defined (label = variable name).
-function refreshVarSelect() {
-  var sel = document.getElementById("btnUsesVar");
+const refreshVarSelect = () => {
+  const sel = document.getElementById("btnUsesVar");
   if (!sel) return;
-  var prev = sel.value;
-  sel.innerHTML = "";
-  var none = document.createElement("option");
+  const prev = sel.value;
+  sel.replaceChildren();
+  const none = document.createElement("option");
   none.value = "";
   none.textContent = "None";
   sel.appendChild(none);
-  var seen = {};
-  config.buttons.forEach(function (b) {
-    if (b.isMaster && b.label && !seen[b.label]) {
-      seen[b.label] = true;
-      var o = document.createElement("option");
-      o.value = b.label;
-      o.textContent = b.label;
-      sel.appendChild(o);
-    }
-  });
+  for (const name of masterNameSet()) {
+    const o = document.createElement("option");
+    o.value = name;
+    o.textContent = name;
+    sel.appendChild(o);
+  }
   sel.value = prev;
   if (sel.value !== prev) sel.value = "";
-}
-function renderBuilderPreview() {
-  var preview = document.getElementById("builderPreview");
+};
+const renderBuilderPreview = () => {
+  const preview = document.getElementById("builderPreview");
   if (!preview) return;
-  preview.innerHTML = "";
-  var previewTitle = document.createElement("h2");
+  preview.replaceChildren();
+  const previewTitle = document.createElement("h2");
   previewTitle.textContent = "Preview";
   preview.appendChild(previewTitle);
   if (!config.buttons.length) {
-    var empty = document.createElement("div");
+    const empty = document.createElement("div");
     empty.className = "empty";
     empty.textContent = "No buttons yet. Add one on the left.";
     preview.appendChild(empty);
     return;
   }
-  config.buttons.forEach(function (btn, index) {
-    var box = document.createElement("div");
+  config.buttons.forEach((btn, index) => {
+    const box = document.createElement("div");
     box.className = "buttonBox builderPreviewItem";
     box.style.position = "relative";
-    var title = document.createElement("div");
+    const title = document.createElement("div");
     title.className = "buttonTitle";
     title.textContent = btn.label || "";
-    var desc = document.createElement("div");
+    const desc = document.createElement("div");
     desc.className = "buttonDesc";
     desc.textContent = btn.desc || "";
-    var badge = null;
+    let badge = null;
     if (btn.isMaster) {
       badge = document.createElement("div");
       badge.className = "previewBadge";
-      badge.textContent = "★ master: " + btn.label;
+      badge.textContent = `★ master: ${btn.label}`;
     } else if (btn.usesVar) {
       badge = document.createElement("div");
       badge.className = "previewBadge linked";
-      badge.textContent = "⛓ uses: " + btn.usesVar + (btn.gate !== false ? " 🔒" : " · no lock");
+      badge.textContent = `⛓ uses: ${btn.usesVar}${btn.gate !== false ? " 🔒" : " · no lock"}`;
     }
-    var copyBadge = null;
+    let copyBadge = null;
     if ((btn.varAction || "url") === "copy") {
       copyBadge = document.createElement("div");
       copyBadge.className = "previewBadge copy";
       copyBadge.textContent = "📋 clipboard";
     }
-    var controls = document.createElement("div");
+    const controls = document.createElement("div");
     controls.className = "pvControls";
-    var up = document.createElement("span");
-    up.className = "pvBtn" + (index === 0 ? " disabled" : "");
+    const up = document.createElement("span");
+    up.className = `pvBtn${index === 0 ? " disabled" : ""}`;
     up.textContent = "▲";
     up.title = "Move up";
-    up.onclick = function () { moveButton(index, -1); };
-    var down = document.createElement("span");
-    down.className = "pvBtn" + (index === config.buttons.length - 1 ? " disabled" : "");
+    up.addEventListener("click", () => moveButton(index, -1));
+    const down = document.createElement("span");
+    down.className = `pvBtn${index === config.buttons.length - 1 ? " disabled" : ""}`;
     down.textContent = "▼";
     down.title = "Move down";
-    down.onclick = function () { moveButton(index, 1); };
-    var edit = document.createElement("span");
+    down.addEventListener("click", () => moveButton(index, 1));
+    const edit = document.createElement("span");
     edit.className = "pvBtn";
     edit.textContent = "✎";
     edit.title = "Edit";
-    edit.onclick = function () { startEdit(index); };
-    var del = document.createElement("span");
+    edit.addEventListener("click", () => startEdit(index));
+    const del = document.createElement("span");
     del.className = "pvBtn danger";
     del.textContent = "✕";
     del.title = "Delete";
-    del.onclick = function () { deleteButton(index); };
-    controls.appendChild(up);
-    controls.appendChild(down);
-    controls.appendChild(edit);
-    controls.appendChild(del);
+    del.addEventListener("click", () => deleteButton(index));
+    controls.append(up, down, edit, del);
     if (index === editIndex) box.classList.add("editing");
-    box.appendChild(title);
-    box.appendChild(desc);
+    box.append(title, desc);
     if (badge) box.appendChild(badge);
     if (copyBadge) box.appendChild(copyBadge);
     box.appendChild(controls);
     preview.appendChild(box);
   });
-}
-
+};
 // =========================================================
 // BUILDER CONTROLS — wired only when the builder exists in
 // this build. Sealed (launcher-only) exports have no builder
 // DOM, so none of this attaches and locks can't be disabled.
 // =========================================================
 if (document.getElementById("builderPanel")) {
-
-document.getElementById("addButton").addEventListener("click", function () {
-  var label = document.getElementById("btnLabel").value.trim();
-  var desc = document.getElementById("btnDesc").value.trim();
-  var url = document.getElementById("btnURL").value.trim();
-  var mode = document.getElementById("btnMode").value;
-  var varAction = document.getElementById("btnVarAction").value;
-  var isMaster = document.getElementById("optMaster").checked;
-  var usesVar = isMaster ? "" : document.getElementById("btnUsesVar").value;
+document.getElementById("addButton").addEventListener("click", () => {
+  const label = document.getElementById("btnLabel").value.trim();
+  const desc = document.getElementById("btnDesc").value.trim();
+  const url = document.getElementById("btnURL").value.trim();
+  const mode = document.getElementById("btnMode").value;
+  const varAction = document.getElementById("btnVarAction").value;
+  const isMaster = document.getElementById("optMaster").checked;
+  const usesVar = isMaster ? "" : document.getElementById("btnUsesVar").value;
   if (!label || !url) {
     alert("Label and URL are required.");
     return;
   }
   // Contradiction check: URL wants the value inserted, but handling
   // is set to clipboard — the placeholder would be scrubbed at runtime
-  if (varAction === "copy" && url.indexOf("{{var}}") !== -1) {
-    var proceed = confirm(
+  if (varAction === "copy" && url.includes("{{var}}")) {
+    const proceed = confirm(
       "Heads up: this URL contains {{var}} but Variable Handling is set " +
       "to 'Copy to clipboard'.\n\nThe {{var}} placeholder will be removed " +
       "from the URL and the value copied instead.\n\n" +
@@ -1104,23 +1057,23 @@ document.getElementById("addButton").addEventListener("click", function () {
     );
     if (!proceed) return;
   }
-  var entry = {
-    label: label,
-    desc: desc,
-    url: url,
-    mode: mode,
-    varAction: varAction,
-    isMaster: isMaster,
-    usesVar: usesVar,
+  const entry = {
+    label,
+    desc,
+    url,
+    mode,
+    varAction,
+    isMaster,
+    usesVar,
     gate: document.getElementById("optGate").checked
   };
   if (editIndex >= 0) {
-    var old = config.buttons[editIndex];
+    const old = config.buttons[editIndex];
     // Renaming a master relinks every dependent button to the new name
     if (old.isMaster && isMaster && old.label !== label) {
-      config.buttons.forEach(function (b) {
+      for (const b of config.buttons) {
         if (b.usesVar === old.label) b.usesVar = label;
-      });
+      }
     }
     config.buttons[editIndex] = entry;
     scrubLinks();
@@ -1135,35 +1088,30 @@ document.getElementById("addButton").addEventListener("click", function () {
   renderProgress();
   renderBuilderPreview();
 });
-
-document.getElementById("cancelEdit").addEventListener("click", function () {
+document.getElementById("cancelEdit").addEventListener("click", () => {
   exitEditMode();
   renderBuilderPreview();
 });
-
 // Master and "uses variable" are mutually exclusive per button
-document.getElementById("optMaster").addEventListener("change", function () {
-  var sel = document.getElementById("btnUsesVar");
-  sel.disabled = this.checked;
-  if (this.checked) sel.value = "";
+const masterToggle = document.getElementById("optMaster");
+masterToggle.addEventListener("change", () => {
+  const sel = document.getElementById("btnUsesVar");
+  sel.disabled = masterToggle.checked;
+  if (masterToggle.checked) sel.value = "";
 });
-
-var massCloseToggle = document.getElementById("optMassClose");
-massCloseToggle.checked = !!config.settings.massClose;
-massCloseToggle.addEventListener("change", function () {
+const massCloseToggle = document.getElementById("optMassClose");
+massCloseToggle.checked = Boolean(config.settings.massClose);
+massCloseToggle.addEventListener("change", () => {
   config.settings.massClose = massCloseToggle.checked;
   renderLauncher();
 });
-
-var enforceLocksToggle = document.getElementById("optEnforceLocks");
-enforceLocksToggle.checked = !!config.settings.enforceLocks;
-enforceLocksToggle.addEventListener("change", function () {
+const enforceLocksToggle = document.getElementById("optEnforceLocks");
+enforceLocksToggle.checked = Boolean(config.settings.enforceLocks);
+enforceLocksToggle.addEventListener("change", () => {
   config.settings.enforceLocks = enforceLocksToggle.checked;
   renderLauncher();
 });
-
 } // end builder-only wiring
-
 // =========================================================
 // EXPORTER — reconstructs the document from STATIC sources
 // only: the CSS text, the inert template markup, this script
@@ -1171,77 +1119,68 @@ enforceLocksToggle.addEventListener("change", function () {
 // Zero reads of the live/rendered DOM. Exports re-export
 // cleanly forever (same structure, same ids).
 // =========================================================
-function exportLauncher() {
-  var suggested = config.title || "Custom Launcher";
-  var title = prompt("Title for the exported launcher:", suggested);
+const exportLauncher = () => {
+  const suggested = config.title || "Custom Launcher";
+  let title = prompt("Title for the exported launcher:", suggested);
   if (title === null) return; // user cancelled export
   title = title.trim() || suggested;
   config.title = title;       // rides in json64, default for next export
-
   // Locked build (trainees) or unlocked build (trusted analysts)?
-  var enforce = confirm(
+  const enforce = confirm(
     "Enforce tier locks in this export?\n\n" +
     "OK = LOCKED — steps gate until their variable is entered (trainees)\n" +
     "Cancel = UNLOCKED — no gating, full freedom (trusted analysts)"
   );
-
   // Ship the builder, or seal it? A sealed export contains no
   // builder DOM at all — locks can't be toggled off or re-exported
   // away, because the machinery simply isn't in the file.
-  var includeBuilder = confirm(
+  const includeBuilder = confirm(
     "Include the Builder in this export?\n\n" +
     "OK = FULL — launcher + builder (editable, self-replicating)\n" +
     "Cancel = SEALED — launcher only (settings are permanent)"
   );
-
-  var css = document.getElementById("appStyles").textContent;
-  var js = document.getElementById("launcherCode").textContent;
-
-  var tplEl = document.getElementById("staticDOM");
-  var staticHTML;
+  const css = document.getElementById("appStyles").textContent;
+  const js = document.getElementById("launcherCode").textContent;
+  const tplEl = document.getElementById("staticDOM");
+  let staticHTML;
   if (includeBuilder) {
     staticHTML = tplEl.innerHTML;
   } else {
     // Mutate a CLONE of the static template — never the template
-    var frag = tplEl.content.cloneNode(true);
-    var bv = frag.querySelector("#builderView");
-    if (bv) bv.remove();
-    var tabs = frag.querySelector("#modeTabs");
-    if (tabs) tabs.remove();
-    var tmp = document.createElement("div");
+    const frag = tplEl.content.cloneNode(true);
+    frag.querySelector("#builderView")?.remove();
+    frag.querySelector("#modeTabs")?.remove();
+    const tmp = document.createElement("div");
     tmp.appendChild(frag);
     staticHTML = tmp.innerHTML;
   }
-
-  var wasEnforced = config.settings.enforceLocks;
+  const wasEnforced = config.settings.enforceLocks;
   config.settings.enforceLocks = enforce;
-  var cfg64 = b64encode(JSON.stringify(config));
+  const cfg64 = b64encode(JSON.stringify(config));
   config.settings.enforceLocks = wasEnforced; // builder session unchanged
-  var safeTitle = title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  var html =
-    "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n" +
-    "<title>" + safeTitle + "</title>\n" +
-    "<style id=\"appStyles\">" + css + "</style>\n" +
-    "</head>\n<body>\n" +
-    "<script id=\"configData\" type=\"application/json+base64\">" + cfg64 + "</scr" + "ipt>\n" +
-    "<template id=\"staticDOM\">" + staticHTML + "</template>\n" +
-    "<div id=\"mount\"></div>\n" +
-    "<script id=\"launcherCode\">" + js + "</scr" + "ipt>\n" +
-    "</body>\n</html>\n";
-
-  var blob = new Blob([html], { type: "text/html" });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement("a");
+  const safeTitle = title.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  // NOTE: the <\/script> escapes below are load-bearing — they stop
+  // the HTML parser from ending THIS script tag early, both here and
+  // in every re-export (this source ships verbatim in each export).
+  const html = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n"
+    + `<title>${safeTitle}</title>\n`
+    + `<style id="appStyles">${css}</style>\n`
+    + "</head>\n<body>\n"
+    + `<script id="configData" type="application/json+base64">${cfg64}<\/script>\n`
+    + `<template id="staticDOM">${staticHTML}</template>\n`
+    + "<div id=\"mount\"></div>\n"
+    + `<script id="launcherCode">${js}<\/script>\n`
+    + "</body>\n</html>\n";
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
   a.href = url;
-  var fname = title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-");
-  a.download = (fname || "launcher") + ".html";
+  const fname = title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-");
+  a.download = `${fname || "launcher"}.html`;
   a.click();
   URL.revokeObjectURL(url);
-}
-var exportBtn = document.getElementById("exportSelf");
-if (exportBtn) exportBtn.addEventListener("click", exportLauncher);
-
+};
+document.getElementById("exportSelf")?.addEventListener("click", exportLauncher);
 // =========================================================
 // INITIAL RENDER
 // =========================================================
