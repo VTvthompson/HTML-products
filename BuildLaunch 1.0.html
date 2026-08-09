@@ -44,6 +44,21 @@
       opacity: 0.2;
       animation: twinkle 3s infinite ease-in-out;
     }
+    /* Named constellation stars — brightness mapped from real magnitude */
+    .star.bright {
+      background: #dbeafe;
+      box-shadow: 0 0 6px rgba(191, 219, 254, 0.8);
+    }
+    #stars .cstLines {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .cstLines line {
+      stroke: rgba(148, 197, 253, 0.16);
+      stroke-width: 1;
+    }
     @keyframes twinkle {
       0%, 100% { opacity: 0.1; transform: scale(1); }
       50% { opacity: 0.8; transform: scale(1.8); }
@@ -220,6 +235,7 @@
       color: #6b7280;
     }
     body.starsFrozen .star { animation: none; opacity: 0.35; }
+    body.starsFrozen .star.bright { opacity: 0.6; }
     body.starsOff #stars { display: none; }
     /* Master variable tiles (cyan edge) + linked tiles */
     .masterBox { border-color: rgba(56, 189, 248, 0.7); }
@@ -765,17 +781,73 @@ const closeAllWindows = () => {
   return n;
 };
 // =========================================================
-// STARFIELD
+// STARFIELD — 200 random filler stars + real constellations.
+// Constellations are DATA, not CSS: [x, y, magnitude] in a
+// local 0–100 box, placed via at:[left%, top%, width%, height%].
+// Geometry is approximate but faithful; brightness maps from
+// real stellar magnitude. Random durations (2–6s) mean the
+// ensemble twinkle never visibly repeats.
 // =========================================================
+const CONSTELLATIONS = [
+  { // Big Dipper (Ursa Major) — Alkaid → Mizar → Alioth → Megrez + bowl
+    at: [4, 8, 22, 16],
+    stars: [[2,30,1.9],[16,18,2.2],[30,12,1.8],[44,10,3.3],[48,34,2.4],[70,36,2.4],[66,8,1.8]],
+    lines: [[0,1],[1,2],[2,3],[3,6],[6,5],[5,4],[4,3]] },
+  { // Cassiopeia — the W
+    at: [40, 5, 16, 9],
+    stars: [[0,20,2.3],[22,38,2.2],[44,14,2.4],[68,34,2.7],[92,10,3.4]],
+    lines: [[0,1],[1,2],[2,3],[3,4]] },
+  { // Cygnus — the Northern Cross (Deneb at the head)
+    at: [68, 10, 15, 24],
+    stars: [[50,0,1.3],[50,38,2.2],[50,96,3.1],[88,52,2.5],[14,22,2.9]],
+    lines: [[0,1],[1,2],[4,1],[1,3]] },
+  { // Lyra — Vega + the little parallelogram
+    at: [55, 30, 7, 9],
+    stars: [[20,0,0.03],[24,22,4.3],[40,28,4.3],[28,60,3.5],[48,66,3.2]],
+    lines: [[0,1],[1,2],[2,4],[4,3],[3,1]] },
+  { // Orion — Betelgeuse/Bellatrix shoulders, the Belt, Rigel/Saiph feet
+    at: [76, 54, 18, 34],
+    stars: [[70,10,0.5],[30,14,1.6],[58,48,1.7],[48,50,1.7],[38,52,2.2],[64,88,2.1],[26,84,0.2]],
+    lines: [[0,1],[0,2],[1,4],[2,3],[3,4],[2,5],[4,6],[5,6]] },
+  { // Scorpius — head fan, Antares, the hook to Shaula's stinger
+    at: [8, 50, 16, 40],
+    stars: [[16,0,2.6],[8,12,2.3],[4,26,2.9],[26,34,1.0],[34,48,2.8],[38,62,2.3],[34,74,3.0],[30,84,3.6],[44,94,1.9],[64,88,1.6],[60,82,2.7]],
+    lines: [[0,1],[1,2],[1,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10]] },
+];
 (() => {
   const starsContainer = document.getElementById("stars");
-  for (let i = 0; i < 200; i++) {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  // line layer goes in first so star dots render on top of it
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "cstLines");
+  starsContainer.appendChild(svg);
+  const makeStar = (left, top, mag) => {
     const s = document.createElement("div");
-    s.className = "star";
-    s.style.top = `${Math.random() * 100}%`;
-    s.style.left = `${Math.random() * 100}%`;
+    s.className = mag !== undefined && mag < 2.6 ? "star bright" : "star";
+    if (mag !== undefined) {
+      const px = mag < 1 ? 4 : mag < 2.2 ? 3 : 2;
+      s.style.width = `${px}px`;
+      s.style.height = `${px}px`;
+    }
+    s.style.left = `${left}%`;
+    s.style.top = `${top}%`;
     s.style.animationDelay = `${Math.random() * 3}s`;
+    s.style.animationDuration = `${2 + Math.random() * 4}s`;
     starsContainer.appendChild(s);
+  };
+  for (let i = 0; i < 200; i++) makeStar(Math.random() * 100, Math.random() * 100);
+  for (const c of CONSTELLATIONS) {
+    const [ox, oy, w, h] = c.at;
+    const pts = c.stars.map(([x, y]) => [ox + (x / 100) * w, oy + (y / 100) * h]);
+    for (const [a, b] of c.lines) {
+      const ln = document.createElementNS(SVG_NS, "line");
+      ln.setAttribute("x1", `${pts[a][0]}%`);
+      ln.setAttribute("y1", `${pts[a][1]}%`);
+      ln.setAttribute("x2", `${pts[b][0]}%`);
+      ln.setAttribute("y2", `${pts[b][1]}%`);
+      svg.appendChild(ln);
+    }
+    c.stars.forEach((st, i) => makeStar(pts[i][0], pts[i][1], st[2]));
   }
 })();
 // =========================================================
