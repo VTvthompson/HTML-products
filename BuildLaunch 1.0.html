@@ -300,6 +300,16 @@
       color: #e5e7eb;
       line-height: 1.7;
     }
+    .guideWarn {
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.45);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #fecaca;
+      line-height: 1.65;
+    }
     /* Master variable tiles (cyan edge) + linked tiles */
     .masterBox { border-color: rgba(56, 189, 248, 0.7); }
     /* Clipboard-mode tiles (yellow edge = value copied, not URL-combined) */
@@ -623,6 +633,7 @@
         <div class="guideCard">
           <h2>What This Is</h2>
           <p>A self-contained launcher for tiered workflows. Every tile opens a destination; values you type ride along into URLs or your clipboard; and the entire platform lives in one HTML file that can rebuild itself. No install, no server, no account.</p>
+          <p><strong>Running it:</strong> double-click the file — it opens in your browser like any webpage. Desktop, shared drive, USB stick, fully offline: all fine. No admin rights required.</p>
         </div>
         <div class="guideCard">
           <h2>The Launcher</h2>
@@ -644,8 +655,20 @@
             <li><strong>Open Mode</strong> — new tab, or a half-screen window for split-screen work.</li>
             <li><strong>Variable Handling</strong> — insert into the URL, or copy to clipboard on open (yellow tile).</li>
             <li><strong>Master variable</strong> — makes this tile the source its linked tiles read from. <strong>Uses Master Variable</strong> links a tile to a master.</li>
+            <li>As many masters as you like — each feeds its own linked tiles. But <strong>one variable per tile</strong>: a tile reads its master or its own input; there's no multi-variable templating.</li>
             <li><strong>Tier lock</strong> — the linked tile stays locked until its variable exists. <strong>Enforce tier locks</strong> previews enforcement here; the real decision is asked again at export.</li>
-            <li><strong>Preview:</strong> drag tiles to reorder (arrows work too), ✎ edits, ✕ deletes. Reordering resets run progress — the sequence changed.</li>
+            <li>Everything you add shows up in the <strong>Preview</strong> panel on the right — that's also where you reorder, edit, and delete (next card).</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>The Preview — Reordering &amp; Editing</h2>
+          <p>Every button you add appears as a card in the Preview panel. <strong>Tile order is workflow order</strong> — the star sequence and tier locks follow it exactly.</p>
+          <ul>
+            <li><strong>Drag to reorder:</strong> grab any card and drag it up or down. A cyan bar marks the landing spot — bar on a card's top edge means yours goes <em>before</em> it, bottom edge means <em>after</em>. Drop on the empty space below the list to send it to the end.</li>
+            <li><strong>▲ ▼ arrows</strong> nudge a card one slot at a time — same result, keyboard friendly.</li>
+            <li><strong>✎ Edit</strong> loads that button back into the form. The card glows yellow and the form button becomes <strong>Save Changes</strong>. Cancel backs out without touching anything.</li>
+            <li><strong>✕ Delete</strong> removes the button instantly. Tiles linked to a deleted master unlink automatically.</li>
+            <li>Reordering, editing, or deleting resets run progress — the sequence changed, so the stars start over.</li>
           </ul>
         </div>
         <div class="guideCard">
@@ -666,7 +689,15 @@
           </ul>
         </div>
         <div class="guideCard">
-          <h2>Export Options</h2>
+          <h2>Exporting — This Is the Save Button</h2>
+          <div class="guideWarn">This file never edits itself. Everything you build or change lives only in this browser tab — close it without exporting and the work is gone. <strong>Export is the save button.</strong></div>
+          <p>End every editing session the same way:</p>
+          <ul>
+            <li>Click <strong>Export New Launcher</strong>, give it a title, then answer the two questions below.</li>
+            <li>A new <code>.html</code> file downloads. <strong>That download is the new version.</strong> The file you're in right now stays exactly as it was — keep it as a backup, or replace it with the download.</li>
+            <li>Repeat after <em>every</em> round of edits. Ten edits without an export are ten edits that don't exist yet.</li>
+          </ul>
+          <p><strong>The two questions:</strong></p>
           <ul>
             <li><strong>Locked vs Unlocked</strong> — locked builds gate each step until its variable is entered (trainees). Unlocked builds trust the analyst.</li>
             <li><strong>Full vs Sealed</strong> — Full ships the builder inside the export: editable and self-replicating. Sealed ships the launcher and this guide, but no builder — settings are permanent because the machinery to change them isn't in the file.</li>
@@ -679,6 +710,35 @@
             <li><strong>Google and Microsoft services</strong> (Workspace, 365, and friends) ship strict cross-origin isolation (COOP). Tabs opened into those services sever the tie to their opener — <strong>Close All can't reach them.</strong> Close those by hand; that's the browser protecting you, not a defect here.</li>
             <li>Close All only tracks windows from the current session. Reload the launcher and it starts a fresh list.</li>
             <li>Your browser may ask once to allow pop-ups for this file. Allow it.</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>Troubleshooting</h2>
+          <ul>
+            <li><strong>Tile shakes and won't open</strong> — it's tier-locked (dashed border): fill its master variable first. Or its URL needs a value — type one into the tile's input.</li>
+            <li><strong>Nothing opened at all</strong> — the browser blocked the pop-up. Allow pop-ups for this file (one-time prompt, usually near the address bar) and click again.</li>
+            <li><strong>Clipboard tile didn't copy</strong> — its input was empty. Type the value first; an empty input copies nothing.</li>
+            <li><strong>Stars or progress reset unexpectedly</strong> — progress resets on Close All, on reload, and on any builder change to the sequence. Intentional: the sequence changed, so the old progress is meaningless.</li>
+            <li><strong>Middle-click does nothing on a locked tile</strong> — correct. Locks apply to every way of opening.</li>
+            <li><strong>The page is completely blank</strong> — JavaScript is disabled in that browser. This entire platform is JavaScript.</li>
+            <li><strong>Can't find your export</strong> — check the browser's Downloads folder. The filename comes from the title you typed.</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>Sharing &amp; Versioning</h2>
+          <ul>
+            <li><strong>To hand it to someone, send the file.</strong> Email, chat, shared drive, USB — it's self-contained and works anywhere, offline, no install.</li>
+            <li><strong>Treat exports as versions.</strong> Put a version or date in the export title — <code>Triage v3 2026-08</code> — since the title becomes the filename.</li>
+            <li><strong>One editable master copy, one owner.</strong> Exports fan out to the team; edits should not. If two people edit separate copies there is <strong>no merge</strong> — someone's work gets redone.</li>
+            <li><strong>Lost or corrupted file?</strong> Any FULL export rebuilds everything — every copy is a complete backup of the platform.</li>
+          </ul>
+        </div>
+        <div class="guideCard">
+          <h2>Privacy &amp; Data</h2>
+          <ul>
+            <li><strong>Nothing leaves the machine.</strong> No server, no account, no telemetry. The only network traffic is the sites your tiles open.</li>
+            <li><strong>Variables reset every session on purpose.</strong> Case numbers and search values you type are never written to disk — close the tab and they're gone. Only your stars preference persists, locally in your browser.</li>
+            <li><strong>The file itself is plaintext.</strong> Labels, descriptions, and URLs are readable by anyone holding the file — don't bake secrets, credentials, or sensitive identifiers into button URLs. Type sensitive values at run time; that's exactly what the variable inputs are for.</li>
           </ul>
         </div>
         <div class="guideCard">
