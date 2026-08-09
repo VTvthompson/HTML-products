@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Custom Launcher Builder</title>
   <style id="appStyles">
     :root {
-      --bg: #050816;
+      color-scheme: dark;
       --fg: #ffffff;
       --accent: #38bdf8;
       --accent-soft: rgba(56, 189, 248, 0.15);
@@ -62,6 +63,7 @@
       padding: 6px;
       border-radius: 999px;
       border: 1px solid rgba(148, 163, 184, 0.4);
+      -webkit-backdrop-filter: blur(16px);
       backdrop-filter: blur(16px);
       width: fit-content;
     }
@@ -95,6 +97,12 @@
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
       gap: 14px;
       margin-top: 10px;
+      max-height: calc(100vh - 220px);
+      max-height: calc(100dvh - 220px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
     }
     .buttonBox {
       background: var(--card-bg);
@@ -108,6 +116,8 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 0;
+      overflow-wrap: anywhere;
       transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
     }
     .buttonBox:hover {
@@ -125,6 +135,14 @@
       font-size: 13px;
       color: #9ca3af;
     }
+    /* Empty-state tile — informational, not clickable */
+    .emptyBox { cursor: default; }
+    .emptyBox:hover {
+      transform: none;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+      border-color: var(--border-subtle);
+      background: var(--card-bg);
+    }
     /* Mass close tile — always pinned to the end of the grid */
     .massCloseBox {
       order: 9999;
@@ -139,6 +157,7 @@
     /* Progress star strip — one star per grid tile */
     #progressBar {
       display: flex;
+      flex-wrap: wrap;
       gap: 10px;
       align-items: center;
       margin: 2px 0 6px;
@@ -198,11 +217,6 @@
       border-color: #facc15;
       box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
     }
-    .varValue {
-      font-size: 12px;
-      color: #a5b4fc;
-      word-break: break-all;
-    }
     .previewBadge {
       align-self: flex-start;
       font-size: 10px;
@@ -236,6 +250,12 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      max-height: calc(100vh - 160px);
+      max-height: calc(100dvh - 160px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
     }
     #builderPanel label {
       font-size: 12px;
@@ -327,6 +347,12 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      max-height: 70vh;
+      max-height: 70dvh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
     }
     #builderPreview h2 {
       font-size: 13px;
@@ -349,6 +375,9 @@
       z-index: 5;
     }
     .pvBtn {
+      background: none;
+      border: none;
+      padding: 0;
       font-size: 15px;
       line-height: 1;
       color: var(--accent);
@@ -403,49 +432,31 @@
       75% { transform: translateX(5px); }
     }
     .buttonBox.shake { animation: shakeNo 0.3s ease; }
+    #builderPreview .builderPreviewItem { flex-shrink: 0; }
+    /* WebKit scrollbar fallback for Chromium <121 — Chrome 121+ uses the
+       standard scrollbar-width/scrollbar-color properties above and
+       ignores these rules */
+    #grid::-webkit-scrollbar,
+    #builderPanel::-webkit-scrollbar,
+    #builderPreview::-webkit-scrollbar { width: 10px; }
+    #grid::-webkit-scrollbar-track,
+    #builderPanel::-webkit-scrollbar-track,
+    #builderPreview::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 5px;
+    }
+    #grid::-webkit-scrollbar-thumb,
+    #builderPanel::-webkit-scrollbar-thumb,
+    #builderPreview::-webkit-scrollbar-thumb {
+      background: #38bdf8;
+      border-radius: 5px;
+    }
     @media (max-width: 800px) {
       body { overflow-y: auto; }
       #builderLayout { grid-template-columns: minmax(0, 1fr); }
+      /* one natural page scroll on small screens, not nested scrollers */
+      #grid, #builderPanel, #builderPreview { max-height: none; }
     }
-	#builderPreview {
-	  max-height: 70vh;
-	  overflow-y: auto;
-	  overscroll-behavior: contain;
-	  scrollbar-width: thin;
-	  scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
-	}
-	#builderPreview::-webkit-scrollbar {
-	  width: 10px;
-	}
-	#builderPreview::-webkit-scrollbar-track {
-	  background: rgba(15, 23, 42, 0.5);
-	  border-radius: 5px;
-	}
-	#builderPreview::-webkit-scrollbar-thumb {
-	  background: #38bdf8;
-	  border-radius: 5px;
-	}
-	#builderPreview .builderPreviewItem {
-	  flex-shrink: 0;
-	}
-	#grid {
-	  max-height: calc(100vh - 220px);
-	  overflow-y: auto;
-	  overscroll-behavior: contain;
-	  scrollbar-width: thin;
-	  scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
-	}
-	#grid::-webkit-scrollbar {
-	  width: 10px;
-	}
-	#grid::-webkit-scrollbar-track {
-	  background: rgba(15, 23, 42, 0.5);
-	  border-radius: 5px;
-	}
-	#grid::-webkit-scrollbar-thumb {
-	  background: #38bdf8;
-	  border-radius: 5px;
-	}
   </style>
 </head>
 <body>
@@ -584,13 +595,15 @@ const config = loadConfig();
 // =========================================================
 // RUNTIME WORKFLOW STATE (never exported — resets each run)
 // =========================================================
-let varValues = {};           // shared variable values, keyed by master label
-let localVals = {};           // per-tile values for tiles with no shared variable
-let openedSteps = new Set();  // button indices opened so far
-let currentStep = -1;         // last opened step (its star jumps)
+// null-prototype maps: user-chosen labels can never collide with
+// Object.prototype keys ("constructor", "__proto__", …)
+let varValues = Object.create(null);  // shared variable values, keyed by master label
+let localVals = Object.create(null);  // per-tile values for tiles with no shared variable
+let openedSteps = new Set();          // button indices opened so far
+let currentStep = -1;                 // last opened step (its star jumps)
 const resetWorkflow = () => {
-  varValues = {};
-  localVals = {};
+  varValues = Object.create(null);
+  localVals = Object.create(null);
   openedSteps = new Set();
   currentStep = -1;
 };
@@ -621,11 +634,14 @@ const resolveURL = (btn, index) => {
 // until its required variable is obtained).
 const setVar = (name, value, sourceEl) => {
   varValues[name] = value;
-  document.querySelectorAll(`[data-var-input="${name}"]`).forEach((el) => {
+  // CSS.escape: labels are user text — quotes/brackets in a label must
+  // not be able to break (or inject into) the attribute selector
+  const sel = CSS.escape(name);
+  document.querySelectorAll(`[data-var-input="${sel}"]`).forEach((el) => {
     if (el !== sourceEl) el.value = value;
   });
   const has = Boolean(value);
-  document.querySelectorAll(`[data-lock-var="${name}"]`).forEach((el) => {
+  document.querySelectorAll(`[data-lock-var="${sel}"]`).forEach((el) => {
     el.classList.toggle("locked", !has);
   });
 };
@@ -720,7 +736,7 @@ const renderLauncher = () => {
   grid.replaceChildren();
   if (!config.buttons.length) {
     const empty = document.createElement("div");
-    empty.className = "buttonBox";
+    empty.className = "buttonBox emptyBox";
     const emptyTitle = document.createElement("div");
     emptyTitle.className = "buttonTitle";
     emptyTitle.textContent = "No buttons yet";
@@ -791,9 +807,17 @@ const renderLauncher = () => {
       });
       a.appendChild(input);
       // Keep href in sync so middle-click / open-in-new-tab gets the
-      // substituted URL instead of the raw template
+      // substituted URL instead of the raw template. Locked tiles (and
+      // {{var}} URLs still missing their value) get no href at all, so
+      // middle-click can't sidestep the gate or open a broken URL.
       a.addEventListener("mousedown", () => {
-        a.href = resolveURL(btn, index);
+        const blocked = a.classList.contains("locked")
+          || (!isCopy && btn.url.includes("{{var}}") && !valueFor(btn, index));
+        if (blocked) {
+          a.removeAttribute("href");
+        } else {
+          a.href = resolveURL(btn, index);
+        }
       });
       // Tier gate: linked tiles stay locked until the variable exists.
       // Only when this button opts in AND the launcher enforces locks.
@@ -825,9 +849,10 @@ const renderLauncher = () => {
         const url = resolveURL(btn, index);
         const mode = btn.mode || "tab";
         if (mode === "window") {
-          const w = Math.floor(window.screen.width / 2);
-          const h = window.screen.height;
-          const left = window.screen.width - w;
+          // avail* respects taskbar/dock; availLeft anchors multi-monitor
+          const w = Math.floor(window.screen.availWidth / 2);
+          const h = window.screen.availHeight;
+          const left = (window.screen.availLeft ?? 0) + window.screen.availWidth - w;
           openTracked(url, `popup,width=${w},height=${h},left=${left},top=0`);
         } else {
           openTracked(url);
@@ -999,26 +1024,23 @@ const renderBuilderPreview = () => {
     }
     const controls = document.createElement("div");
     controls.className = "pvControls";
-    const up = document.createElement("span");
-    up.className = `pvBtn${index === 0 ? " disabled" : ""}`;
-    up.textContent = "▲";
-    up.title = "Move up";
-    up.addEventListener("click", () => moveButton(index, -1));
-    const down = document.createElement("span");
-    down.className = `pvBtn${index === config.buttons.length - 1 ? " disabled" : ""}`;
-    down.textContent = "▼";
-    down.title = "Move down";
-    down.addEventListener("click", () => moveButton(index, 1));
-    const edit = document.createElement("span");
-    edit.className = "pvBtn";
-    edit.textContent = "✎";
-    edit.title = "Edit";
-    edit.addEventListener("click", () => startEdit(index));
-    const del = document.createElement("span");
-    del.className = "pvBtn danger";
-    del.textContent = "✕";
-    del.title = "Delete";
-    del.addEventListener("click", () => deleteButton(index));
+    // Real <button>s: keyboard-focusable, Enter/Space activate, and the
+    // disabled attribute (not just the class) blocks keyboard activation
+    const pvBtn = (cls, glyph, label, onClick, isDisabled = false) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `pvBtn${isDisabled ? " disabled" : ""}${cls ? ` ${cls}` : ""}`;
+      b.textContent = glyph;
+      b.title = label;
+      b.setAttribute("aria-label", label);
+      b.disabled = isDisabled;
+      b.addEventListener("click", onClick);
+      return b;
+    };
+    const up = pvBtn("", "▲", "Move up", () => moveButton(index, -1), index === 0);
+    const down = pvBtn("", "▼", "Move down", () => moveButton(index, 1), index === config.buttons.length - 1);
+    const edit = pvBtn("", "✎", "Edit", () => startEdit(index));
+    const del = pvBtn("danger", "✕", "Delete", () => deleteButton(index));
     controls.append(up, down, edit, del);
     if (index === editIndex) box.classList.add("editing");
     box.append(title, desc);
@@ -1163,6 +1185,7 @@ const exportLauncher = () => {
   // the HTML parser from ending THIS script tag early, both here and
   // in every re-export (this source ships verbatim in each export).
   const html = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n"
+    + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
     + `<title>${safeTitle}</title>\n`
     + `<style id="appStyles">${css}</style>\n`
     + "</head>\n<body>\n"
@@ -1175,10 +1198,12 @@ const exportLauncher = () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  const fname = title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-");
+  // \p{L}\p{N}: keep letters/digits in ANY script, not just ASCII
+  const fname = title.replace(/[^\p{L}\p{N}\- ]+/gu, "").trim().replace(/\s+/g, "-");
   a.download = `${fname || "launcher"}.html`;
   a.click();
-  URL.revokeObjectURL(url);
+  // defer revoke — revoking synchronously can abort the download
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 document.getElementById("exportSelf")?.addEventListener("click", exportLauncher);
 // =========================================================
