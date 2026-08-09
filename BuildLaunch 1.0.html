@@ -407,6 +407,15 @@
       body { overflow-y: auto; }
       #builderLayout { grid-template-columns: minmax(0, 1fr); }
     }
+
+    .thing {
+      overflow-y: auto;
+      scrollbar-width: none;        /* Firefox */
+      -ms-overflow-style: none;     /* old Edge/IE */
+    }
+    .thing::-webkit-scrollbar {
+      display: none;               /* Chrome, Safari */
+    }
   </style>
 </head>
 <body>
