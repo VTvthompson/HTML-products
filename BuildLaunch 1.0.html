@@ -1,624 +1,599 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Custom Launcher Builder</title>
-  <style id="appStyles">
-    :root {
-      color-scheme: dark;
-      --fg: #ffffff;
-      --accent: #38bdf8;
-      --accent-soft: rgba(56, 189, 248, 0.15);
-      --card-bg: rgba(15, 23, 42, 0.9);
-      --border-subtle: rgba(148, 163, 184, 0.4);
-      --danger: #f97373;
-      --danger-soft: rgba(248, 113, 113, 0.15);
-    }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    body {
-      background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
-      color: var(--fg);
-      min-height: 100vh;
-      overflow: hidden;
-      position: relative;
-    }
-    #stars {
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
-      z-index: 0;
-      pointer-events: none;
-    }
-    .star {
-      position: absolute;
-      width: 2px;
-      height: 2px;
-      background: white;
-      border-radius: 50%;
-      opacity: 0.2;
-      animation: twinkle 3s infinite ease-in-out;
-    }
-    /* Named constellation stars — brightness mapped from real magnitude */
-    .star.bright {
-      background: #dbeafe;
-      box-shadow: 0 0 6px rgba(191, 219, 254, 0.8);
-    }
-    #stars .cstLines {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-    }
-    .cstLines line {
-      stroke: rgba(148, 197, 253, 0.16);
-      stroke-width: 1;
-    }
-    @keyframes twinkle {
-      0%, 100% { opacity: 0.1; transform: scale(1); }
-      50% { opacity: 0.8; transform: scale(1.8); }
-    }
-    #app {
-      position: relative;
-      z-index: 1;
-      padding: 20px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-    #modeTabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      background: rgba(15, 23, 42, 0.8);
-      padding: 6px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      -webkit-backdrop-filter: blur(16px);
-      backdrop-filter: blur(16px);
-      width: fit-content;
-    }
-    #modeTabs button {
-      border: none;
-      background: transparent;
-      color: #e5e7eb;
-      padding: 8px 16px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s, color 0.2s, transform 0.1s;
-    }
-    #modeTabs button.active {
-      background: var(--accent-soft);
-      color: var(--accent);
-      transform: translateY(-1px);
-    }
-    .view { display: none; }
-    .view.active { display: block; }
-    #guideView h1,
-    #launcherView h1,
-    #builderView h1 {
-      font-size: 22px;
-      margin-bottom: 12px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: #e5e7eb;
-    }
-    #grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 14px;
-      margin-top: 10px;
-      max-height: calc(100vh - 220px);
-      max-height: calc(100dvh - 220px);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      scrollbar-width: thin;
-      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
-    }
-    .buttonBox {
-      background: var(--card-bg);
-      border-radius: 14px;
-      padding: 12px 14px;
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      cursor: pointer;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-      overflow-wrap: anywhere;
-      transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-    }
-    .buttonBox:hover {
-      transform: translateY(-3px) scale(1.01);
-      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.9);
-      border-color: var(--accent);
-      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
-    }
-    .buttonTitle {
-      font-weight: 600;
-      font-size: 15px;
-      color: #f9fafb;
-    }
-    .buttonDesc {
-      font-size: 13px;
-      color: #9ca3af;
-    }
-    /* Empty-state tile — informational, not clickable */
-    .emptyBox { cursor: default; }
-    .emptyBox:hover {
-      transform: none;
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      border-color: var(--border-subtle);
-      background: var(--card-bg);
-    }
-    /* Mass close tile — always pinned to the end of the grid */
-    .massCloseBox {
-      order: 9999;
-      border-color: rgba(248, 113, 113, 0.6);
-      background: radial-gradient(circle at top left, var(--danger-soft), rgba(15, 23, 42, 0.95));
-    }
-    .massCloseBox:hover {
-      border-color: var(--danger);
-      background: radial-gradient(circle at top left, rgba(248, 113, 113, 0.28), rgba(15, 23, 42, 0.98));
-    }
-    .massCloseBox .buttonTitle { color: #fecaca; }
-    /* Progress star strip — one star per grid tile */
-    #progressBar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      margin: 2px 0 6px;
-      min-height: 26px;
-    }
-    .progressStar {
-      font-size: 18px;
-      line-height: 1;
-      color: #4b5563;
-      opacity: 0.55;
-      user-select: none;
-      transition: color 0.25s, opacity 0.25s, text-shadow 0.25s;
-    }
-    .progressStar.done {
-      color: #facc15;
-      opacity: 1;
-      text-shadow: 0 0 8px rgba(250, 204, 21, 0.75);
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UDM Links</title>
+<style id="appStyles">
+  :root {
+    color-scheme: dark;
+    --fg: #ffffff;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.15);
+    --card-bg: rgba(15, 23, 42, 0.9);
+    --border-subtle: rgba(148, 163, 184, 0.4);
+    --danger: #f97373;
+    --danger-soft: rgba(248, 113, 113, 0.15);
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  body {
+    background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
+    color: var(--fg);
+    min-height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+  #stars {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: white;
+    border-radius: 50%;
+    opacity: 0.2;
+    animation: twinkle 3s infinite ease-in-out;
+  }
+  .star.bright {
+    background: #dbeafe;
+    box-shadow: 0 0 6px rgba(191, 219, 254, 0.8);
+  }
+  #stars .cstLines {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .cstLines line {
+    stroke: rgba(148, 197, 253, 0.16);
+    stroke-width: 1;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.8); }
+  }
+  #app {
+    position: relative;
+    z-index: 1;
+    padding: 20px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  #modeTabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    background: rgba(15, 23, 42, 0.8);
+    padding: 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    width: fit-content;
+  }
+  #modeTabs button {
+    border: none;
+    background: transparent;
+    color: #e5e7eb;
+    padding: 8px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s, color 0.2s, transform 0.1s;
+  }
+  #modeTabs button.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .view { display: none; }
+  .view.active { display: block; }
+  #guideView h1,
+  #launcherView h1,
+  #builderView h1 {
+    font-size: 22px;
+    margin-bottom: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #e5e7eb;
+  }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+    margin-top: 10px;
+    max-height: calc(100vh - 220px);
+    max-height: calc(100dvh - 220px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
+  }
+  .buttonBox {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  }
+  .buttonBox:hover {
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.9);
+    border-color: var(--accent);
+    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
+  }
+  .buttonTitle {
+    font-weight: 600;
+    font-size: 15px;
+    color: #f9fafb;
+  }
+  .buttonDesc {
+    font-size: 13px;
+    color: #9ca3af;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+  .emptyBox { cursor: default; }
+  .emptyBox:hover {
+    transform: none;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+    border-color: var(--border-subtle);
+    background: var(--card-bg);
+  }
+  .massCloseBox {
+    order: 9999;
+    border-color: rgba(248, 113, 113, 0.6);
+    background: radial-gradient(circle at top left, var(--danger-soft), rgba(15, 23, 42, 0.95));
+  }
+  .massCloseBox:hover {
+    border-color: var(--danger);
+    background: radial-gradient(circle at top left, rgba(248, 113, 113, 0.28), rgba(15, 23, 42, 0.98));
+  }
+  .massCloseBox .buttonTitle { color: #fecaca; }
+  #progressBar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin: 2px 0 6px;
+    min-height: 26px;
+  }
+  .progressStar {
+    font-size: 18px;
+    line-height: 1;
+    color: #4b5563;
+    opacity: 0.55;
+    user-select: none;
+    transition: color 0.25s, opacity 0.25s, text-shadow 0.25s;
+  }
+  .progressStar.done {
+    color: #facc15;
+    opacity: 1;
+    text-shadow: 0 0 8px rgba(250, 204, 21, 0.75);
+  }
+  .progressStar.current {
+    animation: starJump 0.9s infinite ease-in-out;
+  }
+  @keyframes starJump {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-4px) rotate(-8deg); }
+    50% { transform: translateY(1px) rotate(6deg); }
+    75% { transform: translateY(-3px) rotate(-4deg); }
+  }
+  #starsCtl {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+  }
+  #starsCtlLabel {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
+  #starsCtl button {
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    background: rgba(15, 23, 42, 0.9);
+    color: #9ca3af;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  #starsCtl button.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  #starsNote {
+    flex-basis: 100%;
+    font-size: 11px;
+    color: #6b7280;
+  }
+  body.starsFrozen .star { animation: none; opacity: 0.35; }
+  body.starsFrozen .star.bright { opacity: 0.6; }
+  body.starsOff #stars { display: none; }
+  #guideWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: calc(100vh - 160px);
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
+    padding-right: 4px;
+  }
+  .guideCard {
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+    flex-shrink: 0;
+  }
+  .guideCard h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .guideCard p {
+    font-size: 13px;
+    color: #cbd5e1;
+    line-height: 1.65;
+    margin-bottom: 8px;
+  }
+  .guideCard p:last-child { margin-bottom: 0; }
+  .guideCard ul { margin-left: 18px; }
+  .guideCard li {
+    font-size: 13px;
+    color: #cbd5e1;
+    line-height: 1.65;
+    margin-bottom: 6px;
+  }
+  .guideCard strong { color: #f9fafb; }
+  .guideCard code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    background: rgba(2, 6, 23, 0.85);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 6px;
+    padding: 1px 6px;
+    color: #facc15;
+  }
+  .guideExample {
+    background: rgba(2, 6, 23, 0.7);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    font-size: 13px;
+    color: #e5e7eb;
+    line-height: 1.7;
+  }
+  .guideWarn {
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #fecaca;
+    line-height: 1.65;
+  }
+  .masterBox { border-color: rgba(56, 189, 248, 0.7); }
+  .copyBox { border-color: rgba(250, 204, 21, 0.65); }
+  .copyBox:hover {
+    border-color: #facc15;
+    background: radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), rgba(15, 23, 42, 0.95));
+  }
+  .varTag {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .varTag.linked { color: #a5b4fc; }
+  .varTag.copy { color: #facc15; }
+  .varInput {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    background: rgba(2, 6, 23, 0.85);
+    color: #e5e7eb;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .varInput:focus {
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
+  }
+  .previewBadge {
+    align-self: flex-start;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(250, 204, 21, 0.5);
+    color: #facc15;
+  }
+  .previewBadge.linked {
+    border-color: rgba(165, 180, 252, 0.5);
+    color: #a5b4fc;
+  }
+  .previewBadge.copy {
+    border-color: rgba(250, 204, 21, 0.5);
+    color: #facc15;
+  }
+  #builderLayout {
+    display: grid;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: flex-start;
+  }
+  #builderPanel {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: calc(100vh - 160px);
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
+  }
+  #builderPanel label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9ca3af;
+    margin-bottom: 2px;
+  }
+  #builderPanel input,
+  #builderPanel select {
+    width: 100%;
+    padding: 7px 9px;
+    border-radius: 10px;
+    border: 1px solid rgba(55, 65, 81, 0.9);
+    background: rgba(15, 23, 42, 0.9);
+    color: #e5e7eb;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  }
+  #builderPanel input:focus,
+  #builderPanel select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+    background: rgba(15, 23, 42, 1);
+  }
+  #builderPanel .row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 4px;
+  }
+  #builderPanel .toggleRow {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  #builderPanel .toggleRow input[type="checkbox"] {
+    width: auto;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  #builderPanel .toggleRow label {
+    margin-bottom: 0;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 13px;
+    color: #e5e7eb;
+    cursor: pointer;
+  }
+  #builderPanel .buttonsRow {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  #builderPanel .buttonsRow button {
+    flex: 1;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    background: rgba(15, 23, 42, 0.9);
+    color: #e5e7eb;
+    padding: 7px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    white-space: nowrap;
+  }
+  #builderPanel .buttonsRow button.primary {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
+    color: #e0f2fe;
+  }
+  #builderPanel .buttonsRow button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.8);
+    border-color: var(--accent);
+    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), rgba(15, 23, 42, 0.98));
+  }
+  #builderPreview {
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 70vh;
+    max-height: 70dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
+  }
+  #builderPreview h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #9ca3af;
+  }
+  #builderPreview .empty {
+    font-size: 13px;
+    color: #6b7280;
+    font-style: italic;
+  }
+  .pvControls {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    display: flex;
+    gap: 10px;
+    z-index: 5;
+  }
+  .pvBtn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--accent);
+    cursor: pointer;
+    user-select: none;
+    text-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+    transition: transform 0.1s, color 0.1s;
+  }
+  .pvBtn:hover {
+    color: #ffffff;
+    transform: scale(1.2);
+    text-shadow: 0 0 12px rgba(56, 189, 248, 1);
+  }
+  .pvBtn.danger {
+    color: var(--danger);
+    text-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+  }
+  .pvBtn.disabled {
+    opacity: 0.25;
+    pointer-events: none;
+  }
+  .builderPreviewItem.editing {
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4), 0 18px 40px rgba(15, 23, 42, 0.7);
+  }
+  .builderPreviewItem { cursor: grab; }
+  .builderPreviewItem:active { cursor: grabbing; }
+  .builderPreviewItem.dragging { opacity: 0.45; }
+  .builderPreviewItem.dropBefore {
+    box-shadow: 0 -8px 0 -4px var(--accent), 0 18px 40px rgba(15, 23, 42, 0.7);
+  }
+  .builderPreviewItem.dropAfter {
+    box-shadow: 0 8px 0 -4px var(--accent), 0 18px 40px rgba(15, 23, 42, 0.7);
+  }
+  .hidden { display: none !important; }
+  .buttonBox.locked {
+    cursor: not-allowed;
+    border-style: dashed;
+  }
+  .buttonBox.locked .buttonTitle,
+  .buttonBox.locked .buttonDesc,
+  .buttonBox.locked .varTag {
+    opacity: 0.4;
+  }
+  .buttonBox.locked:hover {
+    transform: none;
+    border-color: var(--border-subtle);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
+    background: var(--card-bg);
+  }
+  .buttonBox.locked .varInput {
+    border-color: rgba(250, 204, 21, 0.7);
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.25);
+    cursor: text;
+  }
+  @keyframes shakeNo {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+  }
+  .buttonBox.shake { animation: shakeNo 0.3s ease; }
+  #builderPreview .builderPreviewItem { flex-shrink: 0; }
+  #grid::-webkit-scrollbar,
+  #builderPanel::-webkit-scrollbar,
+  #guideWrap::-webkit-scrollbar,
+  #builderPreview::-webkit-scrollbar { width: 10px; }
+  #grid::-webkit-scrollbar-track,
+  #builderPanel::-webkit-scrollbar-track,
+  #guideWrap::-webkit-scrollbar-track,
+  #builderPreview::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 5px;
+  }
+  #grid::-webkit-scrollbar-thumb,
+  #builderPanel::-webkit-scrollbar-thumb,
+  #guideWrap::-webkit-scrollbar-thumb,
+  #builderPreview::-webkit-scrollbar-thumb {
+    background: #38bdf8;
+    border-radius: 5px;
+  }
+  @media (max-width: 800px) {
+    body { overflow-y: auto; }
+    #builderLayout { grid-template-columns: minmax(0, 1fr); }
+    #grid, #builderPanel, #builderPreview, #guideWrap { max-height: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
     .progressStar.current {
-      animation: starJump 0.9s infinite ease-in-out;
-    }
-    @keyframes starJump {
-      0%, 100% { transform: translateY(0) rotate(0deg); }
-      25% { transform: translateY(-4px) rotate(-8deg); }
-      50% { transform: translateY(1px) rotate(6deg); }
-      75% { transform: translateY(-3px) rotate(-4deg); }
-    }
-    /* Stars mode control (On / Frozen / Off) */
-    #starsCtl {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      margin: 0 0 10px;
-    }
-    #starsCtlLabel {
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #9ca3af;
-    }
-    #starsCtl button {
-      border: 1px solid rgba(148, 163, 184, 0.5);
-      background: rgba(15, 23, 42, 0.9);
-      color: #9ca3af;
-      border-radius: 999px;
-      padding: 3px 10px;
-      font-size: 11px;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-    }
-    #starsCtl button.active {
+      animation: none;
       color: var(--accent);
-      border-color: var(--accent);
-      background: var(--accent-soft);
+      text-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
     }
-    #starsNote {
-      flex-basis: 100%;
-      font-size: 11px;
-      color: #6b7280;
-    }
-    body.starsFrozen .star { animation: none; opacity: 0.35; }
-    body.starsFrozen .star.bright { opacity: 0.6; }
-    body.starsOff #stars { display: none; }
-    /* Guide view */
-    #guideWrap {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      max-height: calc(100vh - 160px);
-      max-height: calc(100dvh - 160px);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      scrollbar-width: thin;
-      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
-      padding-right: 4px;
-    }
-    .guideCard {
-      background: var(--card-bg);
-      border: 1px solid var(--border-subtle);
-      border-radius: 14px;
-      padding: 14px 16px;
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      flex-shrink: 0;
-    }
-    .guideCard h2 {
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--accent);
-      margin-bottom: 8px;
-    }
-    .guideCard p {
-      font-size: 13px;
-      color: #cbd5e1;
-      line-height: 1.65;
-      margin-bottom: 8px;
-    }
-    .guideCard p:last-child { margin-bottom: 0; }
-    .guideCard ul { margin-left: 18px; }
-    .guideCard li {
-      font-size: 13px;
-      color: #cbd5e1;
-      line-height: 1.65;
-      margin-bottom: 6px;
-    }
-    .guideCard strong { color: #f9fafb; }
-    .guideCard code {
-      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-      font-size: 12px;
-      background: rgba(2, 6, 23, 0.85);
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      border-radius: 6px;
-      padding: 1px 6px;
-      color: #facc15;
-    }
-    .guideExample {
-      background: rgba(2, 6, 23, 0.7);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      border-radius: 10px;
-      padding: 10px 12px;
-      margin: 8px 0;
-      font-size: 13px;
-      color: #e5e7eb;
-      line-height: 1.7;
-    }
-    .guideWarn {
-      background: rgba(248, 113, 113, 0.08);
-      border: 1px solid rgba(248, 113, 113, 0.45);
-      border-radius: 10px;
-      padding: 10px 12px;
-      margin-bottom: 10px;
-      font-size: 13px;
-      color: #fecaca;
-      line-height: 1.65;
-    }
-    /* Master variable tiles (cyan edge) + linked tiles */
-    .masterBox { border-color: rgba(56, 189, 248, 0.7); }
-    /* Clipboard-mode tiles (yellow edge = value copied, not URL-combined) */
-    .copyBox { border-color: rgba(250, 204, 21, 0.65); }
-    .copyBox:hover {
-      border-color: #facc15;
-      background: radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), rgba(15, 23, 42, 0.95));
-    }
-    .varTag {
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--accent);
-    }
-    .varTag.linked { color: #a5b4fc; }
-    .varTag.copy { color: #facc15; }
-    .varInput {
-      margin-top: 6px;
-      width: 100%;
-      padding: 6px 8px;
-      border-radius: 8px;
-      border: 1px solid rgba(148, 163, 184, 0.5);
-      background: rgba(2, 6, 23, 0.85);
-      color: #e5e7eb;
-      font-size: 13px;
-      outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .varInput:focus {
-      border-color: #facc15;
-      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
-    }
-    .previewBadge {
-      align-self: flex-start;
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 2px 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(250, 204, 21, 0.5);
-      color: #facc15;
-    }
-    .previewBadge.linked {
-      border-color: rgba(165, 180, 252, 0.5);
-      color: #a5b4fc;
-    }
-    .previewBadge.copy {
-      border-color: rgba(250, 204, 21, 0.5);
-      color: #facc15;
-    }
-    #builderLayout {
-      display: grid;
-      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-      gap: 16px;
-      align-items: flex-start;
-    }
-    #builderPanel {
-      background: var(--card-bg);
-      border-radius: 16px;
-      padding: 14px 16px;
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: calc(100vh - 160px);
-      max-height: calc(100dvh - 160px);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      scrollbar-width: thin;
-      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
-    }
-    #builderPanel label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #9ca3af;
-      margin-bottom: 2px;
-    }
-    #builderPanel input,
-    #builderPanel select {
-      width: 100%;
-      padding: 7px 9px;
-      border-radius: 10px;
-      border: 1px solid rgba(55, 65, 81, 0.9);
-      background: rgba(15, 23, 42, 0.9);
-      color: #e5e7eb;
-      font-size: 13px;
-      outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-    }
-    #builderPanel input:focus,
-    #builderPanel select:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
-      background: rgba(15, 23, 42, 1);
-    }
-    #builderPanel .row {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 4px;
-    }
-    #builderPanel .toggleRow {
-      flex-direction: row;
-      align-items: center;
-      gap: 8px;
-    }
-    #builderPanel .toggleRow input[type="checkbox"] {
-      width: auto;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-    #builderPanel .toggleRow label {
-      margin-bottom: 0;
-      text-transform: none;
-      letter-spacing: normal;
-      font-size: 13px;
-      color: #e5e7eb;
-      cursor: pointer;
-    }
-    #builderPanel .buttonsRow {
-      display: flex;
-      gap: 8px;
-      margin-top: 6px;
-    }
-    #builderPanel .buttonsRow button {
-      flex: 1;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.6);
-      background: rgba(15, 23, 42, 0.9);
-      color: #e5e7eb;
-      padding: 7px 10px;
-      font-size: 13px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
-      white-space: nowrap;
-    }
-    #builderPanel .buttonsRow button.primary {
-      border-color: var(--accent);
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.95));
-      color: #e0f2fe;
-    }
-    #builderPanel .buttonsRow button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.8);
-      border-color: var(--accent);
-      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), rgba(15, 23, 42, 0.98));
-    }
-    #builderPreview {
-      background: rgba(15, 23, 42, 0.9);
-      border-radius: 16px;
-      padding: 14px 16px;
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      min-height: 80px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-height: 70vh;
-      max-height: 70dvh;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      scrollbar-width: thin;
-      scrollbar-color: #38bdf8 rgba(15, 23, 42, 0.5);
-    }
-    #builderPreview h2 {
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #9ca3af;
-    }
-    #builderPreview .empty {
-      font-size: 13px;
-      color: #6b7280;
-      font-style: italic;
-    }
-    /* Builder preview item controls (reorder / edit / delete) */
-    .pvControls {
-      position: absolute;
-      top: 8px;
-      right: 10px;
-      display: flex;
-      gap: 10px;
-      z-index: 5;
-    }
-    .pvBtn {
-      background: none;
-      border: none;
-      padding: 0;
-      font-size: 15px;
-      line-height: 1;
-      color: var(--accent);
-      cursor: pointer;
-      user-select: none;
-      text-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
-      transition: transform 0.1s, color 0.1s;
-    }
-    .pvBtn:hover {
-      color: #ffffff;
-      transform: scale(1.2);
-      text-shadow: 0 0 12px rgba(56, 189, 248, 1);
-    }
-    .pvBtn.danger {
-      color: var(--danger);
-      text-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
-    }
-    .pvBtn.disabled {
-      opacity: 0.25;
-      pointer-events: none;
-    }
-    .builderPreviewItem.editing {
-      border-color: #facc15;
-      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4), 0 18px 40px rgba(15, 23, 42, 0.7);
-    }
-    /* Drag & drop reorder — arrows stay as the keyboard/precision path */
-    .builderPreviewItem { cursor: grab; }
-    .builderPreviewItem:active { cursor: grabbing; }
-    .builderPreviewItem.dragging { opacity: 0.45; }
-    .builderPreviewItem.dropBefore {
-      box-shadow: 0 -8px 0 -4px var(--accent), 0 18px 40px rgba(15, 23, 42, 0.7);
-    }
-    .builderPreviewItem.dropAfter {
-      box-shadow: 0 8px 0 -4px var(--accent), 0 18px 40px rgba(15, 23, 42, 0.7);
-    }
-    .hidden { display: none !important; }
-    /* Tier locking — tile needs its variable before it opens.
-       Content dims but the input stays vivid: it IS the unlock. */
-    .buttonBox.locked {
-      cursor: not-allowed;
-      border-style: dashed;
-    }
-    .buttonBox.locked .buttonTitle,
-    .buttonBox.locked .buttonDesc,
-    .buttonBox.locked .varTag {
-      opacity: 0.4;
-    }
-    .buttonBox.locked:hover {
-      transform: none;
-      border-color: var(--border-subtle);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.7);
-      background: var(--card-bg);
-    }
-    .buttonBox.locked .varInput {
-      border-color: rgba(250, 204, 21, 0.7);
-      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.25);
-      cursor: text;
-    }
-    @keyframes shakeNo {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-    .buttonBox.shake { animation: shakeNo 0.3s ease; }
-    #builderPreview .builderPreviewItem { flex-shrink: 0; }
-    /* WebKit scrollbar fallback for Chromium <121 — Chrome 121+ uses the
-       standard scrollbar-width/scrollbar-color properties above and
-       ignores these rules */
-    #grid::-webkit-scrollbar,
-    #builderPanel::-webkit-scrollbar,
-    #guideWrap::-webkit-scrollbar,
-    #builderPreview::-webkit-scrollbar { width: 10px; }
-    #grid::-webkit-scrollbar-track,
-    #builderPanel::-webkit-scrollbar-track,
-    #guideWrap::-webkit-scrollbar-track,
-    #builderPreview::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.5);
-      border-radius: 5px;
-    }
-    #grid::-webkit-scrollbar-thumb,
-    #builderPanel::-webkit-scrollbar-thumb,
-    #guideWrap::-webkit-scrollbar-thumb,
-    #builderPreview::-webkit-scrollbar-thumb {
-      background: #38bdf8;
-      border-radius: 5px;
-    }
-    @media (max-width: 800px) {
-      body { overflow-y: auto; }
-      #builderLayout { grid-template-columns: minmax(0, 1fr); }
-      /* one natural page scroll on small screens, not nested scrollers */
-      #grid, #builderPanel, #builderPreview, #guideWrap { max-height: none; }
-    }
-    /* Respect OS "reduce motion" for the progress star (static glow
-       instead of jumping). The starfield itself is handled by the
-       Stars control — OS setting only picks its DEFAULT, so an
-       explicit "On" choice still wins. */
-    @media (prefers-reduced-motion: reduce) {
-      .progressStar.current {
-        animation: none;
-        color: var(--accent);
-        text-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
-      }
-    }
-  </style>
+  }
+</style>
 </head>
 <body>
-<!-- =========================================================
-     CONFIG — json64. The ONLY thing that changes between
-     exports. Base64-encoded JSON of user variables/buttons.
-========================================================== -->
-<script id="configData" type="application/json+base64">eyJidXR0b25zIjpbXSwic2V0dGluZ3MiOnsibWFzc0Nsb3NlIjp0cnVlfX0=</script>
-<!-- =========================================================
-     STATIC DOM — inert <template>. The browser NEVER parses,
-     mutates, or "translates" template contents. The live UI
-     is a clone; export reads this template verbatim.
-========================================================== -->
+<script id="configData" type="application/json+base64">eyJ0aXRsZSI6IlVETSBMaW5rcyIsImJ1dHRvbnMiOltdLCJzZXR0aW5ncyI6eyJtYXNzQ2xvc2UiOnRydWUsImVuZm9yY2VMb2NrcyI6ZmFsc2V9fQ==</script>
 <template id="staticDOM">
   <div id="stars"></div>
   <div id="app">
@@ -642,6 +617,7 @@
             <li><strong>Cyan-edged tiles are masters.</strong> The value typed there feeds every tile linked to it, live. A master's label is its variable name.</li>
             <li><strong>Dashed-border tiles are tier-locked.</strong> They stay shut until their master variable is filled — they shake if you try early.</li>
             <li><strong>Yellow-edged tiles copy the value to your clipboard</strong> instead of the URL. Paste it inside the site once it opens.</li>
+            <li>Some tiles can be built with <strong>no variable input at all</strong> for plain fixed links.</li>
             <li>The star strip tracks your progress; the bouncing star is your current step. Press Enter inside any tile's input to open it from the keyboard.</li>
             <li><strong>✕ Close All</strong> closes every window this launcher opened and resets the run.</li>
             <li><strong>Stars On / Frozen / Off</strong> — freeze or hide the background if motion bothers you (migraines, vestibular disorders, concussion recovery).</li>
@@ -653,7 +629,7 @@
             <li><strong>Label / Description</strong> — what the tile shows. A master's label doubles as its variable name.</li>
             <li><strong>URL</strong> — the destination. Put <code>{{var}}</code> where the value should land; with no placeholder, the value is appended to the end.</li>
             <li><strong>Open Mode</strong> — new tab, or a half-screen window for split-screen work.</li>
-            <li><strong>Variable Handling</strong> — insert into the URL, or copy to clipboard on open (yellow tile).</li>
+            <li><strong>Variable Handling</strong> — choose no variable input, insert into the URL, or copy to clipboard on open (yellow tile).</li>
             <li><strong>Master variable</strong> — makes this tile the source its linked tiles read from. <strong>Uses Master Variable</strong> links a tile to a master.</li>
             <li>As many masters as you like — each feeds its own linked tiles. But <strong>one variable per tile</strong>: a tile reads its master or its own input; there's no multi-variable templating.</li>
             <li><strong>Tier lock</strong> — the linked tile stays locked until its variable exists. <strong>Enforce tier locks</strong> previews enforcement here; the real decision is asked again at export.</li>
@@ -748,7 +724,7 @@
         <div class="guideCard">
           <h2>The Sky</h2>
           <ul>
-            <li>Six real constellations (main asterism) — Big Dipper, Cassiopeia, Cygnus, Lyra, Orion, Scorpius — plotted from actual star-catalog coordinates (RA/Dec, projected and aspect-corrected). Even the slight kink in Orion's belt is real.</li>
+            <li>Six real constellations — Big Dipper, Cassiopeia, Cygnus, Lyra, Orion, Scorpius — plotted from actual star-catalog coordinates (RA/Dec, projected and aspect-corrected). Even the slight kink in Orion's belt is real.</li>
             <li>Star size and glow map to true stellar magnitude — Vega, Rigel and Betelgeuse outshine the field here exactly as they do outside.</li>
             <li>One artistic license: Orion and Scorpius never share a real sky — Orion sets as the Scorpion rises. In this one, they've made peace.</li>
             <li>The 200 background stars are generated mathematically on every load — random positions, random 2–6 second twinkle cycles. No two sessions ever show the same sky.</li>
@@ -794,6 +770,7 @@
           <div class="row">
             <label for="btnVarAction">Variable Handling</label>
             <select id="btnVarAction">
+              <option value="none">No Variable Input</option>
               <option value="url">Insert into URL ({{var}} or append)</option>
               <option value="copy">Copy to clipboard on open (yellow tile)</option>
             </select>
@@ -809,7 +786,7 @@
             </select>
           </div>
           <div class="row toggleRow">
-            <input type="checkbox" id="optGate" checked>
+            <input type="checkbox" id="optGate" checked="">
             <label for="optGate">Tier lock (linked button needs its variable first)</label>
           </div>
           <div class="row toggleRow">
@@ -833,24 +810,13 @@
     </div>
   </div>
 </template>
-<!-- Live UI mounts here (clone of staticDOM) -->
 <div id="mount"></div>
 <script id="launcherCode">
 "use strict";
-// =========================================================
-// BOOT — clone the static DOM template into the live mount.
-// Everything below only ever touches the CLONE. The template
-// stays pristine and is the sole export source for markup.
-// =========================================================
 (() => {
   const tpl = document.getElementById("staticDOM");
   document.getElementById("mount").appendChild(tpl.content.cloneNode(true));
 })();
-// =========================================================
-// CONFIG (json64) — decode once at boot, encode on export.
-// UTF-8-safe via TextEncoder/TextDecoder (the old
-// unescape/escape trick is deprecated).
-// =========================================================
 const b64encode = (str) => {
   const bytes = new TextEncoder().encode(str);
   let bin = "";
@@ -878,50 +844,33 @@ const loadConfig = () => {
   }
 };
 const config = loadConfig();
-// =========================================================
-// RUNTIME WORKFLOW STATE (never exported — resets each run)
-// =========================================================
-// null-prototype maps: user-chosen labels can never collide with
-// Object.prototype keys ("constructor", "__proto__", …)
-let varValues = Object.create(null);  // shared variable values, keyed by master label
-let localVals = Object.create(null);  // per-tile values for tiles with no shared variable
-let openedSteps = new Set();          // button indices opened so far
-let currentStep = -1;                 // last opened step (its star jumps)
+let varValues = Object.create(null);
+let localVals = Object.create(null);
+let openedSteps = new Set();
+let currentStep = -1;
 const resetWorkflow = () => {
   varValues = Object.create(null);
   localVals = Object.create(null);
   openedSteps = new Set();
   currentStep = -1;
 };
-// Which variable does this button read? Masters read their own label.
 const varNameFor = (btn) => (btn.isMaster ? btn.label : (btn.usesVar || ""));
-// Current value for a tile: shared variable if linked, else its own
 const valueFor = (btn, index) => {
   const name = varNameFor(btn);
   return name ? (varValues[name] || "") : (localVals[index] || "");
 };
-// Substitute variable into URL: {{var}} placeholder if present,
-// otherwise append the encoded value (search-prefix pattern).
-// Clipboard-mode tiles never modify their URL.
 const resolveURL = (btn, index) => {
-  // Copy-mode tiles never carry the value in the URL — but scrub
-  // any stray {{var}} placeholder so it can't leak into the address
-  if ((btn.varAction || "url") === "copy") {
-    return btn.url.replaceAll("{{var}}", "");
-  }
+  const action = btn.varAction || "none";
+  if (action === "none") return btn.url;
+  if (action === "copy") return btn.url.replaceAll("{{var}}", "");
   const val = valueFor(btn, index);
   if (btn.url.includes("{{var}}")) {
     return btn.url.replaceAll("{{var}}", encodeURIComponent(val));
   }
   return val ? btn.url + encodeURIComponent(val) : btn.url;
 };
-// Set a shared variable: sync every tile input bound to it, and
-// lock/unlock gated tiles (tiered workflow: a step cannot open
-// until its required variable is obtained).
 const setVar = (name, value, sourceEl) => {
   varValues[name] = value;
-  // CSS.escape: labels are user text — quotes/brackets in a label must
-  // not be able to break (or inject into) the attribute selector
   const sel = CSS.escape(name);
   document.querySelectorAll(`[data-var-input="${sel}"]`).forEach((el) => {
     if (el !== sourceEl) el.value = value;
@@ -931,9 +880,6 @@ const setVar = (name, value, sourceEl) => {
     el.classList.toggle("locked", !has);
   });
 };
-// Clipboard support for sites whose URLs can't carry the variable.
-// execCommand("copy") is deprecated but kept ONLY as a fallback for
-// non-secure (http:) contexts where navigator.clipboard is undefined.
 const legacyCopy = (text) => {
   const ta = document.createElement("textarea");
   ta.value = text;
@@ -941,7 +887,7 @@ const legacyCopy = (text) => {
   ta.style.opacity = "0";
   document.body.appendChild(ta);
   ta.select();
-  try { document.execCommand("copy"); } catch { /* best effort */ }
+  try { document.execCommand("copy"); } catch {}
   ta.remove();
 };
 const copyToClipboard = (text) => {
@@ -951,10 +897,6 @@ const copyToClipboard = (text) => {
     legacyCopy(text);
   }
 };
-// =========================================================
-// PROGRESS STARS — grey/static until a tile is opened, then
-// yellow; the current step's star jumps around
-// =========================================================
 const renderProgress = () => {
   const bar = document.getElementById("progressBar");
   if (!bar) return;
@@ -969,9 +911,6 @@ const renderProgress = () => {
     bar.appendChild(s);
   });
 };
-// =========================================================
-// WINDOW TRACKING + MASS CLOSE
-// =========================================================
 const openedWindows = [];
 const openTracked = (url, features) => {
   const w = features ? window.open(url, "_blank", features) : window.open(url, "_blank");
@@ -986,50 +925,17 @@ const closeAllWindows = () => {
   }
   return n;
 };
-// =========================================================
-// STARFIELD — 200 random filler stars + real constellations.
-// Constellations are DATA, not CSS: [x, y, magnitude] in a
-// local 0–100 box, placed via at:[left%, top%, width%, height%].
-// Geometry is approximate but faithful; brightness maps from
-// real stellar magnitude. Random durations (2–6s) mean the
-// ensemble twinkle never visibly repeats.
-// =========================================================
 const CONSTELLATIONS = [
-  { // Big Dipper (Ursa Major) — catalog RA/Dec, chart-mirrored (east = left)
-    // Alkaid Mizar Alioth Megrez Phecda Merak Dubhe
-    at: [4, 8, 24, 13],
-    stars: [[0.0,100.0,1.9],[14.2,54.8,2.0],[32.3,46.5,1.8],[55.6,37.9,3.3],[68.6,64.8,2.4],[100.0,43.2,2.4],[98.9,0.0,1.8]],
-    lines: [[0,1],[1,2],[2,3],[3,6],[6,5],[5,4],[4,3]] },
-  { // Cassiopeia — the W
-    // Caph Schedar Gamma Cas Ruchbah Segin
-    at: [40, 5, 17, 9],
-    stars: [[100.0,63.4,2.3],[70.2,100.0,2.2],[54.8,41.4,2.4],[27.2,48.1,2.7],[0.0,0.0,3.4]],
-    lines: [[0,1],[1,2],[2,3],[3,4]] },
-  { // Cygnus — the Northern Cross
-    // Deneb Sadr Albireo Gienah Delta Cyg
-    at: [68, 10, 15, 18],
-    stars: [[6.4,0.0,1.3],[31.7,29.0,2.2],[100.0,100.0,3.1],[0.0,65.3,2.5],[81.1,0.9,2.9]],
-    lines: [[0,1],[1,2],[4,1],[1,3]] },
-  { // Lyra — Vega + parallelogram
-    // Vega Zeta Lyr Delta Lyr Sheliak Sulafat
-    at: [55, 30, 6, 8],
-    stars: [[100.0,0.0,0.03],[64.5,19.4,4.4],[20.2,30.9,4.2],[40.4,89.0,3.5],[0.0,100.0,3.2]],
-    lines: [[0,1],[1,2],[2,4],[4,3],[3,1]] },
-  { // Orion — shoulders, Belt, feet
-    // Betelgeuse Bellatrix Alnitak Alnilam Mintaka Saiph Rigel
-    at: [76, 52, 19, 32],
-    stars: [[0.0,0.0,0.5],[74.0,6.2,1.6],[35.5,54.7,1.8],[46.5,50.4,1.7],[57.0,45.1,2.2],[18.2,100.0,2.1],[100.0,91.4,0.1]],
-    lines: [[0,1],[0,2],[1,4],[2,3],[3,4],[2,5],[4,6],[5,6]] },
-  { // Scorpius — head fan to Shaula's stinger
-    // Acrab Dschubba Pi Sco Antares Tau Sco Eps Sco Mu Sco Zeta Sco Sargas Shaula Lesath
-    at: [6, 55, 24, 27],
-    stars: [[93.4,0.0,2.6],[98.5,12.1,2.3],[100.0,27.2,2.9],[69.0,28.5,1.1],[62.4,36.2,2.8],[47.9,62.4,2.3],[46.2,78.7,3.0],[43.4,97.2,3.6],[0.0,100.0,1.9],[3.8,74.6,1.6],[6.6,75.4,2.7]],
-    lines: [[0,1],[1,2],[1,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10]] },
+  { at: [4, 8, 24, 13], stars: [[0.0,100.0,1.9],[14.2,54.8,2.0],[32.3,46.5,1.8],[55.6,37.9,3.3],[68.6,64.8,2.4],[100.0,43.2,2.4],[98.9,0.0,1.8]], lines: [[0,1],[1,2],[2,3],[3,6],[6,5],[5,4],[4,3]] },
+  { at: [40, 5, 17, 9], stars: [[100.0,63.4,2.3],[70.2,100.0,2.2],[54.8,41.4,2.4],[27.2,48.1,2.7],[0.0,0.0,3.4]], lines: [[0,1],[1,2],[2,3],[3,4]] },
+  { at: [68, 10, 15, 18], stars: [[6.4,0.0,1.3],[31.7,29.0,2.2],[100.0,100.0,3.1],[0.0,65.3,2.5],[81.1,0.9,2.9]], lines: [[0,1],[1,2],[4,1],[1,3]] },
+  { at: [55, 30, 6, 8], stars: [[100.0,0.0,0.03],[64.5,19.4,4.4],[20.2,30.9,4.2],[40.4,89.0,3.5],[0.0,100.0,3.2]], lines: [[0,1],[1,2],[2,4],[4,3],[3,1]] },
+  { at: [76, 52, 19, 32], stars: [[0.0,0.0,0.5],[74.0,6.2,1.6],[35.5,54.7,1.8],[46.5,50.4,1.7],[57.0,45.1,2.2],[18.2,100.0,2.1],[100.0,91.4,0.1]], lines: [[0,1],[0,2],[1,4],[2,3],[3,4],[2,5],[4,6],[5,6]] },
+  { at: [6, 55, 24, 27], stars: [[93.4,0.0,2.6],[98.5,12.1,2.3],[100.0,27.2,2.9],[69.0,28.5,1.1],[62.4,36.2,2.8],[47.9,62.4,2.3],[46.2,78.7,3.0],[43.4,97.2,3.6],[0.0,100.0,1.9],[3.8,74.6,1.6],[6.6,75.4,2.7]], lines: [[0,1],[1,2],[1,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10]] },
 ];
 (() => {
   const starsContainer = document.getElementById("stars");
   const SVG_NS = "http://www.w3.org/2000/svg";
-  // line layer goes in first so star dots render on top of it
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", "cstLines");
   starsContainer.appendChild(svg);
@@ -1062,21 +968,15 @@ const CONSTELLATIONS = [
     c.stars.forEach((st, i) => makeStar(pts[i][0], pts[i][1], st[2]));
   }
 })();
-// =========================================================
-// STARS MODE — On / Frozen / Off. Explicit choice persists
-// per browser; with no saved choice, the OS reduced-motion
-// setting picks the default. Lives in the launcher view, so
-// sealed exports keep it too.
-// =========================================================
 const STARS_KEY = "launcher.starsMode";
 const readStarsMode = () => {
   try {
     const v = localStorage.getItem(STARS_KEY);
     if (v === "on" || v === "frozen" || v === "off") return v;
-  } catch { /* storage unavailable in some file:// setups */ }
+  } catch {}
   try {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return "frozen";
-  } catch { /* no matchMedia — default on */ }
+  } catch {}
   return "on";
 };
 const applyStarsMode = (mode) => {
@@ -1088,14 +988,11 @@ const applyStarsMode = (mode) => {
 };
 document.querySelectorAll("#starsCtl button").forEach((b) => {
   b.addEventListener("click", () => {
-    try { localStorage.setItem(STARS_KEY, b.dataset.stars); } catch { /* best effort */ }
+    try { localStorage.setItem(STARS_KEY, b.dataset.stars); } catch {}
     applyStarsMode(b.dataset.stars);
   });
 });
 applyStarsMode(readStarsMode());
-// =========================================================
-// MODE SWITCHING
-// =========================================================
 document.querySelectorAll("#modeTabs button").forEach((btn) => {
   btn.addEventListener("click", () => {
     const mode = btn.dataset.mode;
@@ -1105,10 +1002,6 @@ document.querySelectorAll("#modeTabs button").forEach((btn) => {
     document.getElementById(`${mode}View`)?.classList.add("active");
   });
 });
-// =========================================================
-// RENDER LAUNCHER (mass close tile always appended LAST,
-// plus CSS order:9999 as a hard guarantee)
-// =========================================================
 const renderLauncher = () => {
   const grid = document.getElementById("grid");
   if (!grid) return;
@@ -1126,13 +1019,16 @@ const renderLauncher = () => {
     grid.appendChild(empty);
   } else {
     config.buttons.forEach((btn, index) => {
-      const isCopy = (btn.varAction || "url") === "copy";
+      const action = btn.varAction || "none";
+      const isCopy = action === "copy";
+      const isNone = action === "none";
       const a = document.createElement("a");
       a.className = "buttonBox"
         + (btn.isMaster ? " masterBox" : "")
         + (isCopy ? " copyBox" : "");
       a.href = btn.url;
       const vname = varNameFor(btn);
+      const showInput = btn.isMaster || Boolean(btn.usesVar) || action === "url" || action === "copy";
       if (btn.isMaster) {
         const tag = document.createElement("div");
         tag.className = "varTag";
@@ -1153,53 +1049,48 @@ const renderLauncher = () => {
       const btnTitle = document.createElement("div");
       btnTitle.className = "buttonTitle";
       btnTitle.textContent = btn.label || "";
+      a.appendChild(btnTitle);
+      let input = null;
+      if (showInput) {
+        input = document.createElement("input");
+        input.className = "varInput";
+        input.type = "text";
+        if (vname) {
+          input.placeholder = btn.usesVar
+            ? `Enter ${vname} to unlock…`
+            : `Enter ${vname}…`;
+          input.value = varValues[vname] || "";
+          input.setAttribute("data-var-input", vname);
+          input.addEventListener("input", () => {
+            setVar(vname, input.value.trim(), input);
+          });
+        } else {
+          input.placeholder = isCopy ? "Value to copy…" : "Enter value…";
+          input.value = localVals[index] || "";
+          input.addEventListener("input", () => {
+            localVals[index] = input.value.trim();
+          });
+        }
+        input.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); a.click(); }
+        });
+        a.appendChild(input);
+      }
       const btnDesc = document.createElement("div");
       btnDesc.className = "buttonDesc";
       btnDesc.textContent = btn.desc || "";
-      a.append(btnTitle, btnDesc);
-      // Every tile has an input slot for the variable it needs.
-      // Linked/master inputs share one value and sync live; the
-      // rest keep a tile-local value.
-      const input = document.createElement("input");
-      input.className = "varInput";
-      input.type = "text";
-      if (vname) {
-        input.placeholder = btn.usesVar
-          ? `Enter ${vname} to unlock…`
-          : `Enter ${vname}…`;
-        input.value = varValues[vname] || "";
-        input.setAttribute("data-var-input", vname);
-        input.addEventListener("input", () => {
-          setVar(vname, input.value.trim(), input);
-        });
-      } else {
-        input.placeholder = isCopy ? "Value to copy…" : "Optional value…";
-        input.value = localVals[index] || "";
-        input.addEventListener("input", () => {
-          localVals[index] = input.value.trim();
-        });
-      }
-      input.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
-      // Enter in the input opens the tile (keyboard = user gesture)
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); a.click(); }
-      });
-      a.appendChild(input);
-      // Keep href in sync so middle-click / open-in-new-tab gets the
-      // substituted URL instead of the raw template. Locked tiles (and
-      // {{var}} URLs still missing their value) get no href at all, so
-      // middle-click can't sidestep the gate or open a broken URL.
+      btnDesc.title = btn.desc || "";
+      a.appendChild(btnDesc);
       a.addEventListener("mousedown", () => {
         const blocked = a.classList.contains("locked")
-          || (!isCopy && btn.url.includes("{{var}}") && !valueFor(btn, index));
+          || (!isNone && !isCopy && btn.url.includes("{{var}}") && !valueFor(btn, index));
         if (blocked) {
           a.removeAttribute("href");
         } else {
           a.href = resolveURL(btn, index);
         }
       });
-      // Tier gate: linked tiles stay locked until the variable exists.
-      // Only when this button opts in AND the launcher enforces locks.
       if (!btn.isMaster && btn.usesVar && btn.gate !== false && config.settings.enforceLocks) {
         a.setAttribute("data-lock-var", btn.usesVar);
         if (!varValues[btn.usesVar]) a.classList.add("locked");
@@ -1212,11 +1103,10 @@ const renderLauncher = () => {
           return;
         }
         const val = valueFor(btn, index);
-        // URL needs a value it doesn't have yet — don't open a broken link
-        if (!isCopy && btn.url.includes("{{var}}") && !val) {
+        if (!isNone && !isCopy && btn.url.includes("{{var}}") && !val) {
           a.classList.add("shake");
           setTimeout(() => a.classList.remove("shake"), 350);
-          input.focus();
+          if (input) input.focus();
           return;
         }
         if (isCopy && val) {
@@ -1228,7 +1118,6 @@ const renderLauncher = () => {
         const url = resolveURL(btn, index);
         const mode = btn.mode || "tab";
         if (mode === "window") {
-          // avail* respects taskbar/dock; availLeft anchors multi-monitor
           const w = Math.floor(window.screen.availWidth / 2);
           const h = window.screen.availHeight;
           const left = (window.screen.availLeft ?? 0) + window.screen.availWidth - w;
@@ -1243,7 +1132,6 @@ const renderLauncher = () => {
       grid.appendChild(a);
     });
   }
-  // Mass close tile — appended after every button, every render
   if (config.settings.massClose) {
     const mc = document.createElement("div");
     mc.className = "buttonBox massCloseBox";
@@ -1256,18 +1144,15 @@ const renderLauncher = () => {
     mc.append(mcTitle, mcDesc);
     mc.addEventListener("click", () => {
       closeAllWindows();
-      resetWorkflow();           // stars back to grey, variables cleared
+      resetWorkflow();
       renderLauncher();
       renderProgress();
     });
     grid.appendChild(mc);
   }
 };
-// =========================================================
-// RENDER BUILDER PREVIEW (neon delete icons)
-// =========================================================
 let editIndex = -1;
-let dragIndex = -1;   // preview item currently being dragged
+let dragIndex = -1;
 const masterNameSet = () => {
   const names = new Set();
   for (const b of config.buttons) {
@@ -1275,7 +1160,6 @@ const masterNameSet = () => {
   }
   return names;
 };
-// Clear usesVar links that point at a master that no longer exists
 const scrubLinks = () => {
   const names = masterNameSet();
   for (const b of config.buttons) {
@@ -1288,7 +1172,7 @@ const clearBuilderForm = () => {
   document.getElementById("btnDesc").value = "";
   document.getElementById("btnURL").value = "";
   document.getElementById("btnMode").value = "tab";
-  document.getElementById("btnVarAction").value = "url";
+  document.getElementById("btnVarAction").value = "none";
   document.getElementById("optGate").checked = true;
   document.getElementById("optMaster").checked = false;
   const sel = document.getElementById("btnUsesVar");
@@ -1311,7 +1195,7 @@ const startEdit = (index) => {
   document.getElementById("btnDesc").value = b.desc || "";
   document.getElementById("btnURL").value = b.url || "";
   document.getElementById("btnMode").value = b.mode || "tab";
-  document.getElementById("btnVarAction").value = b.varAction || "url";
+  document.getElementById("btnVarAction").value = b.varAction || "none";
   document.getElementById("optGate").checked = b.gate !== false;
   const m = document.getElementById("optMaster");
   const sel = document.getElementById("btnUsesVar");
@@ -1327,21 +1211,19 @@ const moveButton = (index, dir) => {
   if (target < 0 || target >= config.buttons.length) return;
   if (editIndex >= 0) exitEditMode();
   [config.buttons[index], config.buttons[target]] = [config.buttons[target], config.buttons[index]];
-  resetWorkflow();               // sequence changed — restart progress
+  resetWorkflow();
   renderLauncher();
   renderProgress();
   renderBuilderPreview();
 };
-// Drag-and-drop reorder: move item `from` so it sits at slot `to`
-// (to may be config.buttons.length, meaning "drop at the end")
 const moveButtonTo = (from, to) => {
   if (from < 0 || from >= config.buttons.length) return;
-  const target = to > from ? to - 1 : to;   // account for the removal shift
-  if (target === from) return;              // no net movement
+  const target = to > from ? to - 1 : to;
+  if (target === from) return;
   if (editIndex >= 0) exitEditMode();
   const [item] = config.buttons.splice(from, 1);
   config.buttons.splice(target, 0, item);
-  resetWorkflow();               // sequence changed — restart progress
+  resetWorkflow();
   renderLauncher();
   renderProgress();
   renderBuilderPreview();
@@ -1350,14 +1232,12 @@ const deleteButton = (index) => {
   config.buttons.splice(index, 1);
   scrubLinks();
   if (editIndex >= 0) exitEditMode();
-  resetWorkflow();               // indices shifted — restart progress
+  resetWorkflow();
   refreshVarSelect();
   renderLauncher();
   renderProgress();
   renderBuilderPreview();
 };
-// Keep the "Uses Master Variable" dropdown in sync with the
-// master buttons currently defined (label = variable name).
 const refreshVarSelect = () => {
   const sel = document.getElementById("btnUsesVar");
   if (!sel) return;
@@ -1411,15 +1291,19 @@ const renderBuilderPreview = () => {
       badge.textContent = `⛓ uses: ${btn.usesVar}${btn.gate !== false ? " 🔒" : " · no lock"}`;
     }
     let copyBadge = null;
-    if ((btn.varAction || "url") === "copy") {
+    if ((btn.varAction || "none") === "copy") {
       copyBadge = document.createElement("div");
       copyBadge.className = "previewBadge copy";
       copyBadge.textContent = "📋 clipboard";
     }
+    let noneBadge = null;
+    if ((btn.varAction || "none") === "none" && !btn.isMaster && !btn.usesVar) {
+      noneBadge = document.createElement("div");
+      noneBadge.className = "previewBadge";
+      noneBadge.textContent = "🔗 fixed link";
+    }
     const controls = document.createElement("div");
     controls.className = "pvControls";
-    // Real <button>s: keyboard-focusable, Enter/Space activate, and the
-    // disabled attribute (not just the class) blocks keyboard activation
     const pvBtn = (cls, glyph, label, onClick, isDisabled = false) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -1440,8 +1324,8 @@ const renderBuilderPreview = () => {
     box.append(title, desc);
     if (badge) box.appendChild(badge);
     if (copyBadge) box.appendChild(copyBadge);
+    if (noneBadge) box.appendChild(noneBadge);
     box.appendChild(controls);
-    // Drag & drop reorder (arrows above remain the keyboard path)
     box.draggable = true;
     box.addEventListener("dragstart", (e) => {
       dragIndex = index;
@@ -1449,7 +1333,7 @@ const renderBuilderPreview = () => {
       try {
         e.dataTransfer.setData("text/plain", String(index));
         e.dataTransfer.effectAllowed = "move";
-      } catch { /* synthetic events may lack dataTransfer */ }
+      } catch {}
     });
     box.addEventListener("dragend", () => {
       dragIndex = -1;
@@ -1459,7 +1343,7 @@ const renderBuilderPreview = () => {
     });
     box.addEventListener("dragover", (e) => {
       if (dragIndex < 0 || index === dragIndex) return;
-      e.preventDefault();          // required to allow the drop
+      e.preventDefault();
       const before = (e.offsetY || 0) < (box.offsetHeight || 0) / 2;
       box.classList.toggle("dropBefore", before);
       box.classList.toggle("dropAfter", !before);
@@ -1469,7 +1353,7 @@ const renderBuilderPreview = () => {
     });
     box.addEventListener("drop", (e) => {
       e.preventDefault();
-      e.stopPropagation();         // don't also trigger the container's end-drop
+      e.stopPropagation();
       if (dragIndex < 0 || index === dragIndex) return;
       const before = box.classList.contains("dropBefore");
       const from = dragIndex;
@@ -1479,124 +1363,103 @@ const renderBuilderPreview = () => {
     preview.appendChild(box);
   });
 };
-// =========================================================
-// BUILDER CONTROLS — wired only when the builder exists in
-// this build. Sealed (launcher-only) exports have no builder
-// DOM, so none of this attaches and locks can't be disabled.
-// =========================================================
 if (document.getElementById("builderPanel")) {
-document.getElementById("addButton").addEventListener("click", () => {
-  const label = document.getElementById("btnLabel").value.trim();
-  const desc = document.getElementById("btnDesc").value.trim();
-  const url = document.getElementById("btnURL").value.trim();
-  const mode = document.getElementById("btnMode").value;
-  const varAction = document.getElementById("btnVarAction").value;
-  const isMaster = document.getElementById("optMaster").checked;
-  const usesVar = isMaster ? "" : document.getElementById("btnUsesVar").value;
-  if (!label || !url) {
-    alert("Label and URL are required.");
-    return;
-  }
-  // Contradiction check: URL wants the value inserted, but handling
-  // is set to clipboard — the placeholder would be scrubbed at runtime
-  if (varAction === "copy" && url.includes("{{var}}")) {
-    const proceed = confirm(
-      "Heads up: this URL contains {{var}} but Variable Handling is set " +
-      "to 'Copy to clipboard'.\n\nThe {{var}} placeholder will be removed " +
-      "from the URL and the value copied instead.\n\n" +
-      "OK = keep clipboard mode · Cancel = go back and fix"
-    );
-    if (!proceed) return;
-  }
-  const entry = {
-    label,
-    desc,
-    url,
-    mode,
-    varAction,
-    isMaster,
-    usesVar,
-    gate: document.getElementById("optGate").checked
-  };
-  if (editIndex >= 0) {
-    const old = config.buttons[editIndex];
-    // Renaming a master relinks every dependent button to the new name
-    if (old.isMaster && isMaster && old.label !== label) {
-      for (const b of config.buttons) {
-        if (b.usesVar === old.label) b.usesVar = label;
-      }
+  document.getElementById("addButton").addEventListener("click", () => {
+    const label = document.getElementById("btnLabel").value.trim();
+    const desc = document.getElementById("btnDesc").value.trim();
+    const url = document.getElementById("btnURL").value.trim();
+    const mode = document.getElementById("btnMode").value;
+    const varAction = document.getElementById("btnVarAction").value;
+    const isMaster = document.getElementById("optMaster").checked;
+    const usesVar = isMaster ? "" : document.getElementById("btnUsesVar").value;
+    if (!label || !url) {
+      alert("Label and URL are required.");
+      return;
     }
-    config.buttons[editIndex] = entry;
-    scrubLinks();
-    resetWorkflow();
+    if (varAction === "copy" && url.includes("{{var}}")) {
+      const proceed = confirm(
+        "Heads up: this URL contains {{var}} but Variable Handling is set " +
+        "to 'Copy to clipboard'.\n\nThe {{var}} placeholder will be removed " +
+        "from the URL and the value copied instead.\n\n" +
+        "OK = keep clipboard mode · Cancel = go back and fix"
+      );
+      if (!proceed) return;
+    }
+    const entry = {
+      label,
+      desc,
+      url,
+      mode,
+      varAction,
+      isMaster,
+      usesVar,
+      gate: document.getElementById("optGate").checked
+    };
+    if (editIndex >= 0) {
+      const old = config.buttons[editIndex];
+      if (old.isMaster && isMaster && old.label !== label) {
+        for (const b of config.buttons) {
+          if (b.usesVar === old.label) b.usesVar = label;
+        }
+      }
+      config.buttons[editIndex] = entry;
+      scrubLinks();
+      resetWorkflow();
+      exitEditMode();
+    } else {
+      config.buttons.push(entry);
+      clearBuilderForm();
+    }
+    refreshVarSelect();
+    renderLauncher();
+    renderProgress();
+    renderBuilderPreview();
+  });
+  document.getElementById("cancelEdit").addEventListener("click", () => {
     exitEditMode();
-  } else {
-    config.buttons.push(entry);
-    clearBuilderForm();
-  }
-  refreshVarSelect();
-  renderLauncher();
-  renderProgress();
-  renderBuilderPreview();
-});
-document.getElementById("cancelEdit").addEventListener("click", () => {
-  exitEditMode();
-  renderBuilderPreview();
-});
-// Master and "uses variable" are mutually exclusive per button
-const masterToggle = document.getElementById("optMaster");
-masterToggle.addEventListener("change", () => {
-  const sel = document.getElementById("btnUsesVar");
-  sel.disabled = masterToggle.checked;
-  if (masterToggle.checked) sel.value = "";
-});
-const massCloseToggle = document.getElementById("optMassClose");
-massCloseToggle.checked = Boolean(config.settings.massClose);
-massCloseToggle.addEventListener("change", () => {
-  config.settings.massClose = massCloseToggle.checked;
-  renderLauncher();
-});
-const enforceLocksToggle = document.getElementById("optEnforceLocks");
-enforceLocksToggle.checked = Boolean(config.settings.enforceLocks);
-enforceLocksToggle.addEventListener("change", () => {
-  config.settings.enforceLocks = enforceLocksToggle.checked;
-  renderLauncher();
-});
-// Dropping on empty preview space (below the items) = move to the end
-const previewEl = document.getElementById("builderPreview");
-previewEl.addEventListener("dragover", (e) => {
-  if (dragIndex >= 0) e.preventDefault();
-});
-previewEl.addEventListener("drop", (e) => {
-  e.preventDefault();
-  if (dragIndex < 0) return;
-  const from = dragIndex;
-  dragIndex = -1;
-  moveButtonTo(from, config.buttons.length);
-});
-} // end builder-only wiring
-// =========================================================
-// EXPORTER — reconstructs the document from STATIC sources
-// only: the CSS text, the inert template markup, this script
-// tag's own source text, and freshly encoded json64 config.
-// Zero reads of the live/rendered DOM. Exports re-export
-// cleanly forever (same structure, same ids).
-// =========================================================
+    renderBuilderPreview();
+  });
+  const masterToggle = document.getElementById("optMaster");
+  masterToggle.addEventListener("change", () => {
+    const sel = document.getElementById("btnUsesVar");
+    sel.disabled = masterToggle.checked;
+    if (masterToggle.checked) sel.value = "";
+  });
+  const massCloseToggle = document.getElementById("optMassClose");
+  massCloseToggle.checked = Boolean(config.settings.massClose);
+  massCloseToggle.addEventListener("change", () => {
+    config.settings.massClose = massCloseToggle.checked;
+    renderLauncher();
+  });
+  const enforceLocksToggle = document.getElementById("optEnforceLocks");
+  enforceLocksToggle.checked = Boolean(config.settings.enforceLocks);
+  enforceLocksToggle.addEventListener("change", () => {
+    config.settings.enforceLocks = enforceLocksToggle.checked;
+    renderLauncher();
+  });
+  const previewEl = document.getElementById("builderPreview");
+  previewEl.addEventListener("dragover", (e) => {
+    if (dragIndex >= 0) e.preventDefault();
+  });
+  previewEl.addEventListener("drop", (e) => {
+    e.preventDefault();
+    if (dragIndex < 0) return;
+    const from = dragIndex;
+    dragIndex = -1;
+    moveButtonTo(from, config.buttons.length);
+  });
+}
 const exportLauncher = () => {
   const suggested = config.title || "Custom Launcher";
   let title = prompt("Title for the exported launcher:", suggested);
-  if (title === null) return; // user cancelled export
+  if (title === null) return;
   title = title.trim() || suggested;
-  config.title = title;       // rides in json64, default for next export
-  // Locked build (trainees) or unlocked build (trusted analysts)?
+  config.title = title;
   const enforce = confirm(
     "Enforce tier locks in this export?\n\n" +
     "OK = LOCKED — steps gate until their variable is entered (trainees)\n" +
     "Cancel = UNLOCKED — no gating, full freedom (trusted analysts)"
   );
-  // Ship the builder, or seal it? A sealed export contains no
-  // builder DOM at all — locks can't be toggled off or re-exported
-  // away, because the machinery simply isn't in the file.
   const includeBuilder = confirm(
     "Include the Builder in this export?\n\n" +
     "OK = FULL — launcher + builder (editable, self-replicating)\n" +
@@ -1609,7 +1472,6 @@ const exportLauncher = () => {
   if (includeBuilder) {
     staticHTML = tplEl.innerHTML;
   } else {
-    // Mutate a CLONE of the static template — never the template
     const frag = tplEl.content.cloneNode(true);
     frag.querySelector("#builderView")?.remove();
     frag.querySelector('#modeTabs [data-mode="builder"]')?.remove();
@@ -1620,11 +1482,8 @@ const exportLauncher = () => {
   const wasEnforced = config.settings.enforceLocks;
   config.settings.enforceLocks = enforce;
   const cfg64 = b64encode(JSON.stringify(config));
-  config.settings.enforceLocks = wasEnforced; // builder session unchanged
+  config.settings.enforceLocks = wasEnforced;
   const safeTitle = title.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  // NOTE: the <\/script> escapes below are load-bearing — they stop
-  // the HTML parser from ending THIS script tag early, both here and
-  // in every re-export (this source ships verbatim in each export).
   const html = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n"
     + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
     + `<title>${safeTitle}</title>\n`
@@ -1639,17 +1498,12 @@ const exportLauncher = () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  // \p{L}\p{N}: keep letters/digits in ANY script, not just ASCII
   const fname = title.replace(/[^\p{L}\p{N}\- ]+/gu, "").trim().replace(/\s+/g, "-");
   a.download = `${fname || "launcher"}.html`;
   a.click();
-  // defer revoke — revoking synchronously can abort the download
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 document.getElementById("exportSelf")?.addEventListener("click", exportLauncher);
-// =========================================================
-// INITIAL RENDER
-// =========================================================
 refreshVarSelect();
 renderLauncher();
 renderProgress();
